@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoChat v30 - Stable Markers & Advanced Highlighting</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #f8f9fa; --card: #ffffff; --primary: #2563eb; --primary-hover: #1d4ed8;
+      --text: #1f2937; --muted: #6b7280; --border: #e5e7eb; --accent: #f3f4f6;
+      --warning: #f59e0b; --arc: #8b5cf6; --bubble: #f97316; --sub: #06b6d4;
+      --sub-range: #f87171; --sub-range-bg: #fef2f2;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+    #app { display: flex; height: 100%; position: relative; }
+    #map { flex: 1; height: 100%; z-index: 1; }
+    #sidebar { width: 360px; background: var(--card); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
+    
+    .sidebar-header { padding: 12px; border-bottom: 1px solid var(--border); background: var(--accent); }
+    .sidebar-header h2 { font-size: 1.2rem; margin-bottom: 4px; }
+    .view-info { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; }
+    .view-info .highlight { color: var(--primary); font-weight: 500; }
+    #returnBtn { width: 100%; background: var(--warning); color: white; border: none; padding: 6px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+    #returnBtn:hover { background: #d97706; }
+    
+    .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg); }
+    .tab { flex: 1; padding: 10px; border: none; background: transparent; cursor: pointer; font-size: 0.85rem; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.2s; }
+    .tab:hover { background: var(--card); color: var(--text); }
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--card); }
+    .tab.subs { color: var(--sub); }
+    .tab.subs.active { border-bottom-color: var(--sub); }
+    
+    #filters { padding: 12px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--border); }
+    .filter-row { display: flex; align-items: center; gap: 10px; }
+    .filter-row span { font-size: 0.85rem; font-weight: 500; min-width: 50px; text-align: right; }
+    .slider-container { flex: 1; }
+    input[type="range"] { width: 100%; cursor: pointer; }
+    input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
+    .slider-labels { display: flex; justify-content: space-between; font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
+    .toggle-all { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; }
+    select, button { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); cursor: pointer; font-size: 0.9rem; }
+    button:hover { background: #e5e7eb; }
+    #refreshBtn { background: var(--primary); color: white; border: none; font-weight: 500; }
+    #refreshBtn:hover { background: var(--primary-hover); }
+    #demoBtn { background: #6b7280; color: white; border: none; font-size: 0.8rem; margin-top: 5px; }
+
+    #content { flex: 1; overflow-y: auto; padding: 8px; }
+    .empty { text-align: center; color: var(--muted); margin-top: 30px; font-size: 0.9rem; }
+    
+    .card { background: var(--card); border: 2px solid var(--border); border-radius: 10px; padding: 10px; margin: 6px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: all 0.2s; }
+    .card:hover { border-color: var(--primary); box-shadow: 0 3px 8px rgba(37, 99, 235, 0.15); }
+    .card.active { border-color: var(--arc); background: #f5f3ff; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2); }
+    .card.subscription { border-color: var(--sub); background: #ecfeff; }
+    
+    .msg-header { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: center; }
+    .category-badge { padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; color: white; font-weight: 500; text-transform: uppercase; }
+    .category-badge.general { background: #6366f1; }
+    .category-badge.question { background: #8b5cf6; }
+    .category-badge.event { background: #10b981; }
+    .category-badge.warning { background: #f59e0b; }
+    .category-badge.subscription { background: var(--sub); }
+    .distance { font-size: 0.75rem; color: var(--muted); font-weight: 500; }
+    .msg-text { font-size: 0.9rem; line-height: 1.4; margin-bottom: 6px; }
+    .meta { font-size: 0.7rem; color: var(--muted); }
+    
+    .action-btn { padding: 4px 8px; background: var(--accent); border: 1px solid var(--border); border-radius: 6px; font-size: 0.75rem; cursor: pointer; display: inline-block; }
+    .action-btn:hover { background: var(--bubble); color: white; border-color: var(--bubble); }
+    .action-btn.danger:hover { background: var(--sub-range); border-color: var(--sub-range); color: white; }
+    
+    .range-editor { display: none; margin: 6px 0; padding: 8px; background: var(--sub-range-bg); border: 1px solid #fca5a5; border-radius: 8px; }
+    .range-editor.open { display: block; }
+    .range-editor label { font-size: 0.8rem; color: #991b1b; display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .range-input-group { display: flex; gap: 8px; align-items: center; }
+    .range-input-group input[type="number"] { width: 60px; padding: 4px; border: 1px solid #fca5a5; border-radius: 4px; text-align: right; font-size: 0.85rem; }
+    
+    .sub-item { background: var(--card); padding: 6px 8px; margin-bottom: 4px; border-radius: 6px; font-size: 0.85rem; border: 1px solid var(--border); cursor: pointer; transition: 0.2s; }
+    .sub-item:hover { border-color: var(--arc); background: #f5f3ff; }
+    .sub-item.original { background: #e0e7ff; border-left: 3px solid var(--primary); }
+    .sub-source { font-size: 0.7rem; color: var(--sub); font-weight: 500; margin-bottom: 2px; }
+
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 20; backdrop-filter: blur(2px); }
+    .hidden { display: none !important; }
+    .modal-content { background: var(--card); padding: 20px; border-radius: 16px; width: 92%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+    .modal-title { font-size: 1.1rem; margin-bottom: 10px; }
+    textarea { width: 100%; height: 80px; padding: 10px; margin: 10px 0; border: 1px solid var(--border); border-radius: 8px; resize: none; font-family: inherit; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 10px; }
+    .modal-actions button { flex: 1; }
+
+    /* 🔧 STABLE MARKER CSS */
+    .gc-view-marker { background: transparent !important; border: none !important; font-size: 28px; line-height: 1; width: 30px; height: 30px; text-align: center; cursor: move; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+    .gc-msg-icon { background: transparent !important; border: none !important; font-size: 24px; line-height: 1; width: 26px; height: 26px; text-align: center; cursor: pointer; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2)); transition: transform 0.2s; }
+    .gc-msg-icon.active { transform: scale(1.3); filter: drop-shadow(0 0 6px var(--arc)); }
+    .gc-sub-icon { filter: drop-shadow(0 1px 3px rgba(6, 182, 212, 0.4)); cursor: move !important; }
+    .gc-captured { filter: drop-shadow(0 0 5px var(--sub-range)) !important; }
+    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+    .gc-view-marker.pulse { animation: pulse 2s infinite; }
+    @media (max-width: 768px) { #app { flex-direction: column; } #map { height: 55%; } #sidebar { width: 100%; height: 45%; border-left: none; border-top: 1px solid var(--border); } }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="map"></div>
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <h2>📍 GeoChat</h2>
+        <div class="view-info" id="viewLocationInfo">📍 Locating...</div>
+        <button id="returnBtn" class="hidden">📍 Return to real location</button>
+      </div>
+      
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('messages')">💬 Messages</button>
+        <button class="tab subs" onclick="switchTab('subscriptions')">📡 Subscriptions</button>
+      </div>
+      
+      <div id="filters">
+        <div class="filter-row">
+          <span>🎯 View Range:</span>
+          <div class="slider-container">
+            <input type="range" id="viewRadius" min="0" max="500" step="0.05" value="10">
+            <div class="slider-labels"><span>0 km</span><span>250 km</span><span>500 km</span></div>
+          </div>
+          <span id="radiusVal" style="min-width:65px;text-align:right;font-size:0.85rem;font-weight:500">10.00 km</span>
+        </div>
+        <div class="filter-row" style="justify-content:flex-end;gap:8px;margin-top:-5px;">
+          <input type="number" id="viewRadiusNum" min="0" max="500" step="0.05" value="10" style="width:75px;padding:4px;border:1px solid var(--border);border-radius:4px;text-align:right;font-size:0.85rem">
+          <span style="font-size:0.8rem;color:var(--muted)">km (exact)</span>
+        </div>
+
+        <label class="toggle-all"><input type="checkbox" id="showAll"> 🌍 Show All</label>
+        <div class="filter-row">
+          <span>⏱️ Time:</span>
+          <div class="slider-container">
+            <input type="range" id="time" min="0" max="100" step="0.5" value="40">
+            <div class="slider-labels"><span>1h</span><span>3mo</span><span>1yr</span></div>
+          </div>
+          <span id="timeVal">30d</span>
+        </div>
+        
+        <select id="categoryFilter"><option value="all">All Categories</option><option value="general">💬 General</option><option value="question">❓ Question</option><option value="event">🎉 Event</option><option value="warning">⚠️ Warning</option><option value="subscription">📡 Subscription</option></select>
+        <button id="refreshBtn">🔄 Apply Filters</button>
+        <button id="demoBtn">🎲 Load Demo</button>
+      </div>
+      <div id="content"></div>
+    </aside>
+
+    <div id="addModal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-title" id="modalTitle">📝 Leave a Message</div>
+        <textarea id="msgText" placeholder="What's happening here?"></textarea>
+        <select id="msgCategory">
+          <option value="general">💬 General</option>
+          <option value="question">❓ Question</option>
+          <option value="event">🎉 Event</option>
+          <option value="warning">⚠️ Warning</option>
+          <option value="subscription">📡 Subscription Bubble</option>
+        </select>
+        <div class="modal-actions"><button id="cancelBtn">Cancel</button><button id="submitBtn" style="background:var(--primary);color:white;border:none">Post</button></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    var items = JSON.parse(localStorage.getItem('gc_items') || '[]');
+    var realLocation = { lat: 48.8566, lng: 2.3522 };
+    var viewLocation = { lat: 48.8566, lng: 2.3522 };
+    var activeId = null;
+    var currentTab = 'messages';
+    var postTarget = { lat: null, lng: null, itemId: null };
+    var rangeEditorsOpen = {};
+    var viewRadius = 10;
+    var viewMarker = null;
+
+    var MAX_TIME_H = 8760;
+    var sliderToTime = function(p) { return Math.max(1, ((Math.max(0.005,p)/100)**2)*MAX_TIME_H); };
+    
+    var fmtDist = function(km) { 
+      if(km >= 1000) return (km/1000).toFixed(2)+'k km';
+      if(km >= 1) return Math.round(km) + ' km';
+      return km.toFixed(2) + ' km'; 
+    };
+    
+    var fmtTime = function(h) { return h<2?'1h':h<24?Math.round(h)+'h':h<168?Math.round(h/24)+'d':h<8760?(h/730).toFixed(1)+'mo':'1yr'; };
+    
+    var getDist = function(a, b) {
+      var R=6371, toRad=Math.PI/180, dLat=(b.lat-a.lat)*toRad, dLon=(b.lng-a.lng)*toRad;
+      var aVal=Math.sin(dLat/2)**2+Math.cos(a.lat*toRad)*Math.cos(b.lat*toRad)*Math.sin(dLon/2)**2;
+      return R*2*Math.atan2(Math.sqrt(aVal),Math.sqrt(1-aVal));
+    };
+    
+    var findItem = function(id) {
+      for(var i=0;i<items.length;i++) if(items[i].id===id) return items[i];
+      return null;
+    };
+
+    window.switchTab = function(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+      if(tab === 'messages') document.querySelector('.tab:first-child').classList.add('active');
+      else document.querySelector('.tab.subs').classList.add('active');
+      applyFilters();
+    };
+
+    var map = L.map('map').setView([viewLocation.lat, viewLocation.lng], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'©OSM', maxZoom:19 }).addTo(map);
+    var markersLayer = L.layerGroup().addTo(map);
+    var radiusCircle = L.circle([viewLocation.lat, viewLocation.lng], {radius: viewRadius*1000, color:'#2563eb', fillColor:'#93c5fd', fillOpacity:0.15, dashArray:'5,5'}).addTo(map);
+
+    // 🔧 ROBUST VIEW MARKER: Created once, direct DOM updates prevent detachment
+    function createViewMarker() {
+      if(viewMarker) return;
+      var isReal = getDist(viewLocation, realLocation) < 0.1;
+      var cls = 'gc-view-marker' + (isReal ? '' : ' pulse');
+      var html = isReal ? '🔵' : '👁️';
+      
+      viewMarker = L.marker([viewLocation.lat, viewLocation.lng], {
+        icon: L.divIcon({ className: cls, html: html, iconSize: [30, 30], iconAnchor: [15, 15] }),
+        draggable: true,
+        zIndexOffset: 2000
+      }).addTo(map);
+
+      viewMarker.on('drag', function(e) {
+        var pos = e.target.getLatLng();
+        viewLocation.lat = pos.lat; viewLocation.lng = pos.lng;
+        radiusCircle.setLatLng(pos);
+      });
+
+      viewMarker.on('dragend', function(e) {
+        var pos = e.target.getLatLng();
+        viewLocation.lat = pos.lat; viewLocation.lng = pos.lng;
+        radiusCircle.setLatLng(pos);
+        refreshViewIcon();
+        updateUI();
+        applyFilters();
+      });
+    }
+    createViewMarker();
+
+    // 🔧 DIRECT DOM MANIPULATION: Avoids setIcon() breaking drag state
+    function refreshViewIcon() {
+      if(!viewMarker) return;
+      var el = viewMarker.getElement();
+      if(el) {
+        var isReal = getDist(viewLocation, realLocation) < 0.1;
+        el.innerHTML = isReal ? '🔵' : '👁️';
+        el.className = 'gc-view-marker' + (isReal ? '' : ' pulse');
+      }
+    }
+
+    if(navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(function(p) { 
+        realLocation.lat = p.coords.latitude; realLocation.lng = p.coords.longitude;
+        viewLocation.lat = realLocation.lat; viewLocation.lng = realLocation.lng;
+        viewMarker.setLatLng([viewLocation.lat, viewLocation.lng]);
+        radiusCircle.setLatLng([viewLocation.lat, viewLocation.lng]);
+        refreshViewIcon(); updateUI(); applyFilters(); 
+      }, function() { updateUI(); applyFilters(); });
+    } else { updateUI(); applyFilters(); }
+
+    map.on('click', function(e) { 
+      setActive(null);
+      viewLocation.lat = e.latlng.lat; viewLocation.lng = e.latlng.lng;
+      postTarget = { lat: viewLocation.lat, lng: viewLocation.lng, itemId: null };
+      viewMarker.setLatLng([viewLocation.lat, viewLocation.lng]);
+      radiusCircle.setLatLng([viewLocation.lat, viewLocation.lng]);
+      radiusCircle.setRadius(viewRadius * 1000);
+      refreshViewIcon(); updateUI(); applyFilters(); 
+      openModal(); 
+    });
+
+    // 🔧 ADVANCED HIGHLIGHTING: Handles regular messages & captured fallbacks
+    window.setActive = function(id) {
+      activeId = id;
+      var targetItem = findItem(id);
+      
+      // If clicked item is captured but outside current view range, highlight parent sub instead
+      if(targetItem && targetItem.category !== 'subscription') {
+        var isCaptured = false;
+        for(var i=0; i<items.length; i++) {
+          if(items[i].category === 'subscription' && items[i].range > 0) {
+            var distToSub = getDist(items[i], targetItem);
+            if(distToSub <= items[i].range) {
+              isCaptured = true;
+              // If not in range, switch to subs tab and activate the subscription
+              var dToMe = getDist(viewLocation, targetItem);
+              if(dToMe > viewRadius) {
+                switchTab('subscriptions');
+                activeId = items[i].id;
+              }
+              break;
+            }
+          }
+        }
+      }
+
+      applyFilters();
+      if(activeId) {
+        requestAnimationFrame(function() {
+          var el = document.querySelector('.card[data-id="' + activeId + '"]');
+          if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          var mapItem = findItem(activeId);
+          if(mapItem) map.panTo([mapItem.lat, mapItem.lng], {animate: true});
+        });
+      }
+    };
+
+    window.centerMapOnItem = function(id) { setActive(id); };
+    window.turnIntoBubble = function(id) {
+      var item = findItem(id);
+      if(item) { item.isThread = true; saveData(); applyFilters(); }
+    };
+    window.toggleRangeEditor = function(id) {
+      rangeEditorsOpen[id] = !rangeEditorsOpen[id];
+      applyFilters();
+    };
+    window.setRangeValue = function(id, val) {
+      var num = parseFloat(val);
+      if(isNaN(num) || num < 0) num = 0;
+      var item = findItem(id);
+      if(item) {
+        item.range = Math.round(num * 100) / 100;
+        saveData();
+        var slider = document.getElementById('range-slider-' + id);
+        var input = document.getElementById('range-num-' + id);
+        var label = document.getElementById('range-label-' + id);
+        if(slider) slider.value = num;
+        if(input) input.value = num;
+        if(label) label.textContent = num.toFixed(2) + ' km';
+      }
+    };
+    window.applyRangeChange = function(id) { applyFilters(); };
+    window.editSubscription = function(id) {
+      var item = findItem(id);
+      if(!item) return;
+      var newTitle = prompt("Edit subscription title:", item.title);
+      if(newTitle && newTitle.trim()) { item.title = newTitle.trim(); saveData(); applyFilters(); }
+    };
+    window.deleteSubscription = function(id) {
+      if(!confirm("Delete this subscription? Captured messages will remain as standalone items.")) return;
+      var idx = items.findIndex(function(i){ return i.id === id; });
+      if(idx !== -1) { items.splice(idx, 1); delete rangeEditorsOpen[id]; saveData(); applyFilters(); }
+    };
+
+    window.openModal = function(itemId) {
+      var modal = document.getElementById('addModal');
+      var title = document.getElementById('modalTitle');
+      if(itemId) {
+        var item = findItem(itemId);
+        title.textContent = '➕ Add to Thread: ' + (item ? item.title : 'Item');
+        postTarget = { lat: item.lat, lng: item.lng, itemId: itemId };
+      } else { title.textContent = '📝 Leave a Message'; }
+      modal.classList.remove('hidden');
+    };
+
+    function renderMap(allVisible) {
+      markersLayer.clearLayers();
+      var iconMap = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',subscription:'📡'};
+      var subRangeColor = '#f87171';
+
+      for(var i=0; i<allVisible.length; i++) {
+        var item = allVisible[i];
+        if(item.category === 'subscription' && item.range > 0) {
+          L.circle([item.lat, item.lng], {
+            radius: item.range * 1000, color: subRangeColor, fillColor: subRangeColor,
+            fillOpacity: 0.12, weight: 2, dashArray: '5, 5'
+          }).addTo(markersLayer);
+        }
+      }
+
+      for(var i=0; i<allVisible.length; i++) {
+        var item = allVisible[i];
+        if(!item.lat || !item.lng) continue;
+        
+        var isSub = item.category === 'subscription';
+        var isActive = item.id === activeId;
+        var isCaptured = !!item._isCaptured;
+        
+        var html = iconMap[item.category] || '📍';
+        var cls = 'gc-msg-icon' + (isSub ? ' gc-sub-icon' : '') + (isActive ? ' active' : '') + (isCaptured ? ' gc-captured' : '');
+        
+        var popup = isSub 
+          ? '<b>'+item.title+'</b><br>📡 Subscription<br>📏 Range: '+item.range.toFixed(2)+'km<br>📥 Captured: '+item.capturedCount+' msgs'
+          : (item.isThread 
+            ? '<b>'+item.title+'</b><br>🎈 '+item.messages.length+' msgs<br>📏 Range: '+item.range.toFixed(2)+'km' 
+            : '<b>'+item.author+'</b><br>'+item.messages[0].text);
+            
+        var marker = L.marker([item.lat, item.lng], {
+          icon: L.divIcon({className: cls, html: html, iconSize:[26,26], iconAnchor:[13,13]}),
+          draggable: isSub
+        }).bindPopup(popup).addTo(markersLayer);
+        
+        (function(cur, isS) {
+          if(isS) {
+            marker.on('dragend', function(e) {
+              var p = e.target.getLatLng();
+              var orig = findItem(cur.id);
+              if(orig) { orig.lat = p.lat; orig.lng = p.lng; }
+              saveData(); applyFilters();
+            });
+          }
+          marker.on('click', function(e) {
+            L.DomEvent.stopPropagation(e);
+            if(isS) {
+              var d = getDist(viewLocation, cur);
+              switchTab(d <= viewRadius ? 'messages' : 'subscriptions');
+            }
+            setActive(cur.id);
+          });
+        })(item, isSub);
+      }
+    }
+
+    function renderList(displayItems) {
+      var el = document.getElementById('content'); el.innerHTML = '';
+      if(!displayItems.length) {
+        el.innerHTML = '<p class="empty">' + (currentTab === 'subscriptions' ? 'No subscription bubbles.' : 'No messages in current range.') + '</p>'; 
+        return;
+      }
+
+      for(var k=0; k<displayItems.length; k++) {
+        (function(item) {
+          var isSub = item.category === 'subscription';
+          var card = document.createElement('div');
+          card.className = 'card ' + (isSub ? 'subscription' : '');
+          card.dataset.id = item.id;
+          if(item.id === activeId) card.classList.add('active');
+
+          var dist = fmtDist(item._dist);
+          var html = '<div class="msg-header"><span class="category-badge '+(isSub?'subscription':item.category)+'">'+(isSub?'📡 Subscription':(item.isThread?'🎈 Thread':'💬 Message'))+'</span><span class="distance">📏 '+dist+'</span></div>';
+
+          if(isSub) {
+            html += '<p class="msg-text" style="font-weight:500">'+item.title+'</p>';
+            var isSelected = item.id === activeId;
+            var isEditorOpen = rangeEditorsOpen[item.id];
+            
+            if(isSelected) {
+              html += '<div style="display:flex; gap:6px; margin:6px 0; flex-wrap:wrap;">'
+                + '<button class="action-btn" onclick="event.stopPropagation(); toggleRangeEditor(\''+item.id+'\')">⚙️ Range</button>'
+                + '<button class="action-btn" onclick="event.stopPropagation(); editSubscription(\''+item.id+'\')">✏️ Edit</button>'
+                + '<button class="action-btn danger" onclick="event.stopPropagation(); deleteSubscription(\''+item.id+'\')">🗑️ Delete</button>'
+                + '<span style="font-size:0.75rem;color:var(--muted);align-self:center">📥 '+item.capturedCount+' msgs</span></div>';
+              
+              if(isEditorOpen) {
+                html += '<div class="range-editor open" id="range-editor-'+item.id+'" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()">'
+                  + '<label>Capture Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label>'
+                  + '<div class="range-input-group">'
+                  + '<input type="range" min="0" max="500" step="0.05" value="'+item.range+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\', this.value)" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()">'
+                  + '<input type="number" min="0" max="500" step="0.05" value="'+item.range+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\', this.value); applyRangeChange(\''+item.id+'\')" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()">'
+                  + '</div></div>';
+              }
+            } else {
+              html += '<div style="font-size:0.75rem;color:var(--muted);margin:6px 0">📥 '+item.capturedCount+' messages captured</div>';
+            }
+            
+            if(item.capturedMessages && item.capturedMessages.length > 0) {
+              for(var j=0; j<item.capturedMessages.length; j++) {
+                var cm = item.capturedMessages[j];
+                html += '<div class="sub-item" onclick="event.stopPropagation(); centerMapOnItem(\''+cm.sourceId+'\')">'
+                  + '<div class="sub-source">📍 From: '+cm.sourceTitle+' ('+fmtDist(cm.distance)+')</div>'
+                  + '<div class="meta">👤 '+cm.author+' · '+new Date(cm.timestamp).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'
+                  + cm.text + '</div>';
+              }
+            } else if(isSelected) {
+              html += '<div style="padding:10px;text-align:center;color:var(--muted);font-size:0.85rem">No messages captured yet.</div>';
+            }
+          } else {
+            if(item.isThread) {
+              html += '<p class="msg-text" style="font-weight:500">'+item.title+'</p>';
+              var isExpanded = item.id === activeId;
+              var isEditorOpen = rangeEditorsOpen[item.id];
+              if(isExpanded) {
+                html += '<div style="display:flex; gap:6px; margin:6px 0;">'
+                  + '<button class="action-btn" onclick="event.stopPropagation(); toggleRangeEditor(\''+item.id+'\')">⚙️ Range</button>'
+                  + '<button class="action-btn" onclick="event.stopPropagation(); openModal(\''+item.id+'\')">➕ Add message</button>'
+                  + '<span style="font-size:0.75rem;color:var(--muted);align-self:center">💬 '+item.messages.length+' msgs</span></div>';
+                if(isEditorOpen) {
+                  html += '<div class="range-editor open" id="range-editor-'+item.id+'" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()">'
+                    + '<label>Visibility Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label>'
+                    + '<div class="range-input-group">'
+                    + '<input type="range" min="0" max="500" step="0.05" value="'+item.range+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\', this.value)" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()">'
+                    + '<input type="number" min="0" max="500" step="0.05" value="'+item.range+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\', this.value); applyRangeChange(\''+item.id+'\')" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()">'
+                    + '</div></div>';
+                }
+              } else {
+                html += '<div style="font-size:0.75rem;color:var(--muted);margin:6px 0">💬 '+item.messages.length+' msgs</div>';
+              }
+              if(item.messages && item.messages.length > 0) {
+                for(var j=0; j<item.messages.length; j++) {
+                  var m = item.messages[j];
+                  var isOrig = j === 0;
+                  html += '<div class="sub-item '+(isOrig?'original':'')+'" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
+                    + (isOrig ? '<div style="font-size:0.7rem;color:var(--primary);margin-bottom:2px">📍 Original</div>' : '')
+                    + '<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'
+                    + m.text + '</div>';
+                }
+              }
+            } else {
+              var m = item.messages[0];
+              html += '<div class="msg-entry" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
+                + '<p class="msg-text" style="margin-bottom:2px">'+m.text+'</p>'
+                + '<div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div></div>';
+              html += '<button class="action-btn" style="margin-top:6px;" onclick="event.stopPropagation(); turnIntoBubble(\''+item.id+'\')">🎈 Turn into Bubble</button>';
+            }
+          }
+
+          card.innerHTML = html;
+          card.onclick = function(e) {
+            if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.closest('.range-editor') || e.target.closest('.sub-item')) return;
+            setActive(item.id);
+          };
+          el.appendChild(card);
+        })(displayItems[k]);
+      }
+    }
+
+    function applyFilters() {
+      var showAll = document.getElementById('showAll').checked;
+      var category = document.getElementById('categoryFilter').value;
+      var userRadius = showAll ? Infinity : viewRadius;
+      document.getElementById('radiusVal').textContent = showAll ? '∞' : fmtDist(userRadius);
+
+      var timeInput = parseFloat(document.getElementById('time').value);
+      var hours = sliderToTime(timeInput);
+      document.getElementById('timeVal').textContent = fmtTime(hours);
+      var cutoff = Date.now() - (hours * 3600000);
+
+      var capturedSourceIds = new Set();
+      var allSubs = [];
+      var allMessagesForMap = [];
+      var allMessagesForList = [];
+
+      // 1. Process Subscriptions (Always visible on map)
+      for(var i=0; i<items.length; i++) {
+        var item = items[i];
+        if(item.category === 'subscription') {
+          var d = getDist(viewLocation, item);
+          var captured = [];
+          for(var k=0; k<items.length; k++) {
+            var source = items[k];
+            if(source.id === item.id || source.category === 'subscription') continue;
+            var distToSource = getDist(item, source);
+            if(distToSource <= item.range) {
+              capturedSourceIds.add(source.id);
+              for(var m=0; m<source.messages.length; m++) {
+                var msg = source.messages[m];
+                if(msg.timestamp >= cutoff) {
+                  captured.push({ text: msg.text, author: msg.author, timestamp: msg.timestamp, category: msg.category, sourceTitle: source.title, sourceId: source.id, distance: distToSource });
+                }
+              }
+            }
+          }
+          captured.sort(function(a,b) { return b.timestamp - a.timestamp; });
+          allSubs.push(Object.assign({}, item, {_dist: d, capturedMessages: captured, capturedCount: captured.length}));
+        }
+      }
+
+      // 2. Process Messages
+      for(var i=0; i<items.length; i++) {
+        var item = items[i];
+        if(item.category === 'subscription') continue;
+        var validMsgs = [];
+        for(var j=0; j<item.messages.length; j++) {
+          if(item.messages[j].timestamp >= cutoff) validMsgs.push(item.messages[j]);
+        }
+        if(validMsgs.length === 0) continue;
+
+        var d = getDist(viewLocation, item);
+        var catMatch = category === 'all' || item.category === category;
+        var isCaptured = capturedSourceIds.has(item.id);
+
+        // LOGIC: Map shows items if they are IN RANGE or CAPTURED
+        if((d <= userRadius || isCaptured) && catMatch) {
+          allMessagesForMap.push(Object.assign({}, item, {_dist: d, messages: validMsgs, _isCaptured: isCaptured}));
+        }
+
+        // LOGIC: List shows items ONLY if IN RANGE
+        if(d <= userRadius && catMatch) {
+          allMessagesForList.push(Object.assign({}, item, {_dist: d, messages: validMsgs, _isCaptured: isCaptured}));
+        }
+      }
+
+      var mapItems = allMessagesForMap.concat(allSubs);
+      renderMap(mapItems);
+      
+      var listItems = currentTab === 'subscriptions' ? allSubs : allMessagesForList;
+      listItems.sort(function(a,b){return a._dist - b._dist;});
+      renderList(listItems);
+      
+      radiusCircle.setRadius(showAll ? 200000000 : userRadius * 1000);
+    }
+
+    function updateUI() {
+      var isReal = getDist(viewLocation, realLocation)<0.1;
+      document.getElementById('viewLocationInfo').innerHTML = isReal
+        ? '📍 Viewing from: <span class="highlight">Your GPS</span>'
+        : '👁️ Viewing from: <span class="highlight">'+viewLocation.lat.toFixed(4)+', '+viewLocation.lng.toFixed(4)+'</span>';
+      document.getElementById('returnBtn').classList.toggle('hidden', isReal);
+    }
+
+    document.getElementById('time').addEventListener('input', function(e) { applyFilters(); });
+    document.getElementById('categoryFilter').addEventListener('change', function(e) { applyFilters(); });
+    document.getElementById('showAll').addEventListener('change', function(e) { applyFilters(); });
+    document.getElementById('refreshBtn').addEventListener('click', function() { applyFilters(); });
+    document.getElementById('returnBtn').addEventListener('click', function() { 
+      if(navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(p) {
+          realLocation.lat = p.coords.latitude; realLocation.lng = p.coords.longitude;
+          viewLocation.lat = realLocation.lat; viewLocation.lng = realLocation.lng;
+          viewMarker.setLatLng([viewLocation.lat, viewLocation.lng]);
+          radiusCircle.setLatLng([viewLocation.lat, viewLocation.lng]);
+          refreshViewIcon(); updateUI(); applyFilters(); map.panTo(viewLocation, {animate:true});
+        });
+      } else { 
+        viewLocation.lat = realLocation.lat; viewLocation.lng = realLocation.lng;
+        viewMarker.setLatLng([viewLocation.lat, viewLocation.lng]);
+        radiusCircle.setLatLng([viewLocation.lat, viewLocation.lng]);
+        refreshViewIcon(); updateUI(); applyFilters(); map.panTo(viewLocation, {animate:true}); 
+      }
+    });
+
+    document.getElementById('viewRadius').addEventListener('input', function(e) {
+      var val = parseFloat(e.target.value);
+      document.getElementById('viewRadiusNum').value = val.toFixed(2);
+      viewRadius = val;
+      if(!document.getElementById('showAll').checked) applyFilters();
+      radiusCircle.setRadius(viewRadius * 1000);
+    });
+
+    document.getElementById('viewRadiusNum').addEventListener('change', function(e) {
+      var val = parseFloat(e.target.value);
+      if(isNaN(val) || val < 0) val = 0;
+      if(val > 500) val = 500;
+      viewRadius = Math.round(val * 100) / 100;
+      document.getElementById('viewRadius').value = viewRadius;
+      if(!document.getElementById('showAll').checked) applyFilters();
+      radiusCircle.setRadius(viewRadius * 1000);
+    });
+
+    document.getElementById('viewRadius').value = viewRadius;
+    document.getElementById('viewRadiusNum').value = viewRadius.toFixed(2);
+
+    document.getElementById('cancelBtn').onclick = function() { document.getElementById('addModal').classList.add('hidden'); };
+    document.getElementById('submitBtn').onclick = function() {
+      var text = document.getElementById('msgText').value.trim(); 
+      if(!text) return alert('Enter a message');
+      var cat = document.getElementById('msgCategory').value;
+      var newMsg = { 
+        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), 
+        lat: postTarget.lat, lng: postTarget.lng, 
+        text: text, category: cat, 
+        author:'User_'+Math.floor(Math.random()*9000+1000), 
+        timestamp:Date.now() 
+      };
+      
+      if(postTarget.itemId) {
+        var item = findItem(postTarget.itemId);
+        if(item && item.category !== 'subscription') {
+          item.messages.push(newMsg);
+          item.title = item.messages[0].text.length > 20 ? item.messages[0].text.substring(0, 20) + '…' : item.messages[0].text;
+        }
+      } else {
+        items.push({ 
+          id: newMsg.id, lat: postTarget.lat, lng: postTarget.lng, 
+          range: cat === 'subscription' ? viewRadius : 0, 
+          isThread: false, category: cat, 
+          title: text.length > 20 ? text.substring(0, 20) + '…' : text, 
+          messages: cat === 'subscription' ? [] : [newMsg] 
+        });
+      }
+      document.getElementById('addModal').classList.add('hidden'); 
+      document.getElementById('msgText').value=''; 
+      postTarget = {lat:null,lng:null,itemId:null}; 
+      saveData(); applyFilters();
+    };
+
+    document.getElementById('demoBtn').addEventListener('click', function() {
+      if(items.length>10 && !confirm('Replace data?')) return;
+      var cats=['general','question','event','warning'];
+      var texts=['Coffee spot ☕','Park open?','Concert 8PM 🎵','Road closed ⚠️','Sunset view 🌅','Walk anyone?','Traffic 🚗','Market 🛍️','Lost dog 🐕','Performer 🎻'];
+      var demoItems = [];
+      for(var i=0;i<12;i++) {
+        var dist=[0.1,1,5,30,100][Math.floor(Math.random()*5)], angle=Math.random()*Math.PI*2;
+        var dLat=(dist/111.32)*Math.cos(angle), dLng=(dist/(111.32*Math.cos(viewLocation.lat*Math.PI/180)))*Math.sin(angle);
+        var txt = texts[Math.floor(Math.random()*texts.length)];
+        demoItems.push({ 
+          id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), 
+          lat:viewLocation.lat+dLat, lng:viewLocation.lng+dLng, range:0, isThread:false, 
+          category:cats[Math.floor(Math.random()*cats.length)], 
+          title: txt.length>20?txt.substring(0,20)+'…':txt, 
+          messages:[{id:crypto.randomUUID(), text:txt, category:cats[Math.floor(Math.random()*cats.length)], author:'Demo_'+(i+1), timestamp:Date.now()-Math.floor(Math.random()*86400000*7)}] 
+        });
+      }
+      demoItems.push({ 
+        id: crypto.randomUUID(), lat: viewLocation.lat, lng: viewLocation.lng, 
+        range: viewRadius, isThread: false, category: 'subscription', 
+        title: 'Local News Feed 📡', messages: [] 
+      });
+      items = demoItems; saveData(); applyFilters();
+    });
+
+    function saveData() { localStorage.setItem('gc_items', JSON.stringify(items)); }
+    updateUI(); applyFilters();
+  </script>
+</body>
+</html>
