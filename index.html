@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GeoChat v30 - Stable Markers & Advanced Highlighting</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GeoChat v56 - Mobile-Optimized Layout</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -13,19 +13,19 @@
       --sub-range: #f87171; --sub-range-bg: #fef2f2;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-    body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
-    #app { display: flex; height: 100%; position: relative; }
+    body { background: var(--bg); color: var(--text); height: 100dvh; height: 100vh; overflow: hidden; }
+    #app { display: flex; height: 100dvh; height: 100vh; position: relative; }
     #map { flex: 1; height: 100%; z-index: 1; }
     #sidebar { width: 360px; background: var(--card); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
     
-    .sidebar-header { padding: 12px; border-bottom: 1px solid var(--border); background: var(--accent); }
+    .sidebar-header { padding: 12px; border-bottom: 1px solid var(--border); background: var(--accent); flex-shrink: 0; }
     .sidebar-header h2 { font-size: 1.2rem; margin-bottom: 4px; }
-    .view-info { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; }
+    .view-info { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; min-height: 18px; }
     .view-info .highlight { color: var(--primary); font-weight: 500; }
-    #returnBtn { width: 100%; background: var(--warning); color: white; border: none; padding: 6px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+    #returnBtn { width: 100%; background: var(--warning); color: white; border: none; padding: 6px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; display: none; }
     #returnBtn:hover { background: #d97706; }
     
-    .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg); }
+    .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg); flex-shrink: 0; }
     .tab { flex: 1; padding: 10px; border: none; background: transparent; cursor: pointer; font-size: 0.85rem; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.2s; }
     .tab:hover { background: var(--card); color: var(--text); }
     .tab.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--card); }
@@ -46,13 +46,14 @@
     #refreshBtn:hover { background: var(--primary-hover); }
     #demoBtn { background: #6b7280; color: white; border: none; font-size: 0.8rem; margin-top: 5px; }
 
-    #content { flex: 1; overflow-y: auto; padding: 8px; }
+    #content { flex: 1; overflow-y: auto; padding: 8px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
     .empty { text-align: center; color: var(--muted); margin-top: 30px; font-size: 0.9rem; }
     
     .card { background: var(--card); border: 2px solid var(--border); border-radius: 10px; padding: 10px; margin: 6px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: all 0.2s; }
     .card:hover { border-color: var(--primary); box-shadow: 0 3px 8px rgba(37, 99, 235, 0.15); }
     .card.active { border-color: var(--arc); background: #f5f3ff; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2); }
     .card.subscription { border-color: var(--sub); background: #ecfeff; }
+    .card.bubble-sub { border-color: var(--bubble); background: #fff7ed; }
     
     .msg-header { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: center; }
     .category-badge { padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; color: white; font-weight: 500; text-transform: uppercase; }
@@ -61,6 +62,7 @@
     .category-badge.event { background: #10b981; }
     .category-badge.warning { background: #f59e0b; }
     .category-badge.subscription { background: var(--sub); }
+    .category-badge.new { background: #fbbf24; color: #451a03; }
     .distance { font-size: 0.75rem; color: var(--muted); font-weight: 500; }
     .msg-text { font-size: 0.9rem; line-height: 1.4; margin-bottom: 6px; }
     .meta { font-size: 0.7rem; color: var(--muted); }
@@ -80,6 +82,10 @@
     .sub-item.original { background: #e0e7ff; border-left: 3px solid var(--primary); }
     .sub-source { font-size: 0.7rem; color: var(--sub); font-weight: 500; margin-bottom: 2px; }
 
+    .msg-entry { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-bottom: 6px; cursor: pointer; transition: 0.2s; }
+    .msg-entry:last-child { margin-bottom: 0; }
+    .msg-entry:hover { border-color: var(--bubble); }
+
     .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 20; backdrop-filter: blur(2px); }
     .hidden { display: none !important; }
     .modal-content { background: var(--card); padding: 20px; border-radius: 16px; width: 92%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
@@ -88,15 +94,46 @@
     .modal-actions { display: flex; gap: 10px; margin-top: 10px; }
     .modal-actions button { flex: 1; }
 
-    /* 🔧 STABLE MARKER CSS */
     .gc-view-marker { background: transparent !important; border: none !important; font-size: 28px; line-height: 1; width: 30px; height: 30px; text-align: center; cursor: move; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+    .gc-view-marker.pulse { animation: pulse 2s infinite; }
     .gc-msg-icon { background: transparent !important; border: none !important; font-size: 24px; line-height: 1; width: 26px; height: 26px; text-align: center; cursor: pointer; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2)); transition: transform 0.2s; }
     .gc-msg-icon.active { transform: scale(1.3); filter: drop-shadow(0 0 6px var(--arc)); }
     .gc-sub-icon { filter: drop-shadow(0 1px 3px rgba(6, 182, 212, 0.4)); cursor: move !important; }
     .gc-captured { filter: drop-shadow(0 0 5px var(--sub-range)) !important; }
     @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
-    .gc-view-marker.pulse { animation: pulse 2s infinite; }
-    @media (max-width: 768px) { #app { flex-direction: column; } #map { height: 55%; } #sidebar { width: 100%; height: 45%; border-left: none; border-top: 1px solid var(--border); } }
+    
+    /* 🔧 MOBILE OPTIMIZED LAYOUT */
+    @media (max-width: 768px) {
+      #app { flex-direction: column; }
+      #map { flex: 0 0 42vh; width: 100%; height: auto; min-height: 200px; }
+      #sidebar {
+        flex: 1;
+        width: 100%;
+        height: auto;
+        min-height: 0; /* CRITICAL: Allows flex child to shrink & scroll */
+        border-left: none;
+        border-top: 2px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #filters {
+        flex-shrink: 0;
+        max-height: 45vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 8px;
+      }
+      #content {
+        flex: 1;
+        min-height: 0; /* CRITICAL: Enables scrolling in nested flex */
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        padding: 10px;
+      }
+      .modal-content { width: 96%; max-width: 96%; margin: 0 10px; }
+    }
   </style>
 </head>
 <body>
@@ -106,7 +143,7 @@
       <div class="sidebar-header">
         <h2>📍 GeoChat</h2>
         <div class="view-info" id="viewLocationInfo">📍 Locating...</div>
-        <button id="returnBtn" class="hidden">📍 Return to real location</button>
+        <button id="returnBtn">📍 Return to my location</button>
       </div>
       
       <div class="tabs">
@@ -115,27 +152,23 @@
       </div>
       
       <div id="filters">
-        <div class="filter-row">
-          <span>🎯 View Range:</span>
+        <div class="filter-row" id="viewRangeRow" style="display:none;">
+          <span>🎯 Range:</span>
           <div class="slider-container">
-            <input type="range" id="viewRadius" min="0" max="500" step="0.05" value="10">
-            <div class="slider-labels"><span>0 km</span><span>250 km</span><span>500 km</span></div>
+            <input type="range" id="viewRadius" min="0" max="100" step="0.1" value="50">
+            <div class="slider-labels"><span>Micro</span><span id="sliderMax">10 km</span></div>
           </div>
-          <span id="radiusVal" style="min-width:65px;text-align:right;font-size:0.85rem;font-weight:500">10.00 km</span>
-        </div>
-        <div class="filter-row" style="justify-content:flex-end;gap:8px;margin-top:-5px;">
-          <input type="number" id="viewRadiusNum" min="0" max="500" step="0.05" value="10" style="width:75px;padding:4px;border:1px solid var(--border);border-radius:4px;text-align:right;font-size:0.85rem">
-          <span style="font-size:0.8rem;color:var(--muted)">km (exact)</span>
+          <span id="radiusVal" style="min-width:65px;text-align:right;font-size:0.85rem;font-weight:500">5.00 km</span>
         </div>
 
         <label class="toggle-all"><input type="checkbox" id="showAll"> 🌍 Show All</label>
         <div class="filter-row">
           <span>⏱️ Time:</span>
           <div class="slider-container">
-            <input type="range" id="time" min="0" max="100" step="0.5" value="40">
-            <div class="slider-labels"><span>1h</span><span>3mo</span><span>1yr</span></div>
+            <input type="range" id="time" min="0" max="100" step="0.1" value="50">
+            <div class="slider-labels"><span>1h</span><span>1yr</span></div>
           </div>
-          <span id="timeVal">30d</span>
+          <span id="timeVal" style="min-width:65px;text-align:right;font-size:0.85rem;font-weight:500">30d</span>
         </div>
         
         <select id="categoryFilter"><option value="all">All Categories</option><option value="general">💬 General</option><option value="question">❓ Question</option><option value="event">🎉 Event</option><option value="warning">⚠️ Warning</option><option value="subscription">📡 Subscription</option></select>
@@ -163,545 +196,367 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
+    var toSec = function(ts) { return ts > 1e12 ? Math.floor(ts / 1000) : ts; };
     var items = JSON.parse(localStorage.getItem('gc_items') || '[]');
-    var realLocation = { lat: 48.8566, lng: 2.3522 };
-    var viewLocation = { lat: 48.8566, lng: 2.3522 };
+    items.forEach(it => {
+      it.createdAt = toSec(it.createdAt) || toSec(Date.now());
+      if(it.messages) it.messages.forEach(m => m.timestamp = toSec(m.timestamp));
+    });
+
+    var realLocation = null;
+    var viewLocation = null;
     var activeId = null;
     var currentTab = 'messages';
     var postTarget = { lat: null, lng: null, itemId: null };
     var rangeEditorsOpen = {};
-    var viewRadius = 10;
+    var viewRadius = 5;
     var viewMarker = null;
+    
+    var currentMaxKm = 10; var currentItemMaxKm = 2; var minKm = 0.01;
+    var minTimeH = 1; var maxTimeH = 8760; var viewTimeH = 720;
+    var allTags = ['general', 'question', 'event', 'warning', 'new'];
 
-    var MAX_TIME_H = 8760;
-    var sliderToTime = function(p) { return Math.max(1, ((Math.max(0.005,p)/100)**2)*MAX_TIME_H); };
-    
-    var fmtDist = function(km) { 
-      if(km >= 1000) return (km/1000).toFixed(2)+'k km';
-      if(km >= 1) return Math.round(km) + ' km';
-      return km.toFixed(2) + ' km'; 
-    };
-    
+    var fmtDist = function(km) { if(km >= 1000) return (km/1000).toFixed(2)+'k km'; if(km >= 1) return Math.round(km) + ' km'; return km.toFixed(2) + ' km'; };
     var fmtTime = function(h) { return h<2?'1h':h<24?Math.round(h)+'h':h<168?Math.round(h/24)+'d':h<8760?(h/730).toFixed(1)+'mo':'1yr'; };
-    
-    var getDist = function(a, b) {
-      var R=6371, toRad=Math.PI/180, dLat=(b.lat-a.lat)*toRad, dLon=(b.lng-a.lng)*toRad;
-      var aVal=Math.sin(dLat/2)**2+Math.cos(a.lat*toRad)*Math.cos(b.lat*toRad)*Math.sin(dLon/2)**2;
-      return R*2*Math.atan2(Math.sqrt(aVal),Math.sqrt(1-aVal));
+    var getDist = function(a, b) { var R=6371, toRad=Math.PI/180, dLat=(b.lat-a.lat)*toRad, dLon=(b.lng-a.lng)*toRad, aVal=Math.sin(dLat/2)**2+Math.cos(a.lat*toRad)*Math.cos(b.lat*toRad)*Math.sin(dLon/2)**2; return R*2*Math.atan2(Math.sqrt(aVal),Math.sqrt(1-aVal)); };
+    var findItem = function(id) { for(var i=0;i<items.length;i++) if(items[i].id===id) return items[i]; return null; };
+
+    function kmToPercent(km, max) { if(km < minKm) km = minKm; return Math.min(100, Math.max(0, 100 * (Math.log(km / minKm) / Math.log(max / minKm)))); }
+    function percentToKm(percent, max) { return minKm * Math.pow(max / minKm, percent / 100); }
+
+    window.toggleSubTag = function(subId, tag) {
+      var sub = findItem(subId); if(!sub || !sub.allowedTags) return;
+      var idx = sub.allowedTags.indexOf(tag);
+      if(idx > -1) sub.allowedTags.splice(idx, 1); else sub.allowedTags.push(tag);
+      saveData(); applyFilters();
     };
-    
-    var findItem = function(id) {
-      for(var i=0;i<items.length;i++) if(items[i].id===id) return items[i];
-      return null;
-    };
+
+    function getBubbleInnerHTML(item, isNew) {
+      var html = '', dist = item._dist !== undefined ? fmtDist(item._dist) : fmtDist(getDist(viewLocation, item));
+      var catMap = { general: '💬 General', question: '❓ Question', event: '🎉 Event', warning: '⚠️ Warning' };
+      var badgeHtml = '<span class="category-badge '+item.category+'">'+(catMap[item.category] || '💬 Message')+'</span>';
+      if(isNew) badgeHtml = '<span class="category-badge new">✨ New</span> ' + badgeHtml;
+      html += '<div class="msg-header">'+badgeHtml+'<span class="distance">📏 '+dist+'</span></div>';
+      if(item.isThread) {
+        html += '<p class="msg-text" style="font-weight:500">'+item.title+'</p>';
+        if(item.messages && item.messages.length > 0) {
+          for(var j=0; j<item.messages.length; j++) {
+            var m = item.messages[j], isOrig = j === 0;
+            html += '<div class="sub-item '+(isOrig?'original':'')+'" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
+              + (isOrig ? '<div style="font-size:0.7rem;color:var(--primary);margin-bottom:2px">📍 Original</div>' : '')
+              + '<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+m.text+'</div>';
+          }
+        }
+      } else {
+        var m = item.messages[0];
+        html += '<div class="msg-entry" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
+          + '<p class="msg-text" style="margin-bottom:2px">'+m.text+'</p>'
+          + '<div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div></div>';
+      }
+      return html;
+    }
 
     window.switchTab = function(tab) {
       currentTab = tab;
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
       if(tab === 'messages') document.querySelector('.tab:first-child').classList.add('active');
       else document.querySelector('.tab.subs').classList.add('active');
+      document.getElementById('viewRangeRow').style.display = (tab === 'messages' && viewLocation) ? 'flex' : 'none';
       applyFilters();
     };
 
-    var map = L.map('map').setView([viewLocation.lat, viewLocation.lng], 13);
+    var map = L.map('map').setView([20, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'©OSM', maxZoom:19 }).addTo(map);
     var markersLayer = L.layerGroup().addTo(map);
-    var radiusCircle = L.circle([viewLocation.lat, viewLocation.lng], {radius: viewRadius*1000, color:'#2563eb', fillColor:'#93c5fd', fillOpacity:0.15, dashArray:'5,5'}).addTo(map);
+    var radiusCircle = L.circle([20,0], {radius: viewRadius*1000, color:'#2563eb', fillColor:'#93c5fd', fillOpacity:0.15, dashArray:'5,5'}).addTo(map);
+    var selectedRangeCircle = L.circle([0,0], {radius:0, color:'#8b5cf6', fillColor:'#8b5cf6', fillOpacity:0.12, dashArray:'3,3', weight: 2, interactive: false}).addTo(map);
 
-    // 🔧 ROBUST VIEW MARKER: Created once, direct DOM updates prevent detachment
-    function createViewMarker() {
-      if(viewMarker) return;
-      var isReal = getDist(viewLocation, realLocation) < 0.1;
-      var cls = 'gc-view-marker' + (isReal ? '' : ' pulse');
-      var html = isReal ? '🔵' : '👁️';
-      
-      viewMarker = L.marker([viewLocation.lat, viewLocation.lng], {
-        icon: L.divIcon({ className: cls, html: html, iconSize: [30, 30], iconAnchor: [15, 15] }),
-        draggable: true,
-        zIndexOffset: 2000
-      }).addTo(map);
+    function getMaxKmFromZoom() { return Math.max(0.05, 0.2 * Math.pow(2, 19 - map.getZoom())); }
+    function getMaxItemKmFromZoom() { return Math.min(50, Math.max(0.05, 0.5 * Math.pow(2, 14 - map.getZoom()))); }
 
-      viewMarker.on('drag', function(e) {
-        var pos = e.target.getLatLng();
-        viewLocation.lat = pos.lat; viewLocation.lng = pos.lng;
-        radiusCircle.setLatLng(pos);
-      });
-
-      viewMarker.on('dragend', function(e) {
-        var pos = e.target.getLatLng();
-        viewLocation.lat = pos.lat; viewLocation.lng = pos.lng;
-        radiusCircle.setLatLng(pos);
-        refreshViewIcon();
-        updateUI();
-        applyFilters();
+    function adaptSlidersToZoom() {
+      if(!viewLocation) return;
+      currentMaxKm = getMaxKmFromZoom(); currentItemMaxKm = getMaxItemKmFromZoom();
+      document.getElementById('sliderMax').textContent = fmtDist(currentMaxKm);
+      if(viewRadius > currentMaxKm) { viewRadius = currentMaxKm; radiusCircle.setRadius(viewRadius * 1000); }
+      if(viewRadius < minKm) viewRadius = minKm;
+      document.getElementById('viewRadius').value = kmToPercent(viewRadius, currentMaxKm);
+      items.forEach(function(item) {
+        if (rangeEditorsOpen[item.id]) {
+          var km = item.range;
+          if (km > currentItemMaxKm) { km = currentItemMaxKm; item.range = km; saveData(); }
+          var slider = document.getElementById('range-slider-' + item.id);
+          var num = document.getElementById('range-num-' + item.id);
+          var lbl = document.getElementById('range-label-' + item.id);
+          if(slider) slider.value = kmToPercent(km, currentItemMaxKm);
+          if(num) num.value = km.toFixed(2); if(lbl) lbl.textContent = km.toFixed(2) + ' km';
+        }
       });
     }
-    createViewMarker();
+    map.on('zoomend', adaptSlidersToZoom);
 
-    // 🔧 DIRECT DOM MANIPULATION: Avoids setIcon() breaking drag state
+    function initLocation(lat, lng, success) {
+      viewLocation = { lat, lng };
+      if (success) realLocation = { lat, lng }; else realLocation = null;
+      if (!viewMarker) {
+        viewMarker = L.marker([lat, lng], { icon: L.divIcon({ className: 'gc-view-marker pulse', html: '...', iconSize: [30, 30], iconAnchor: [15, 15] }), draggable: true, zIndexOffset: 2000 }).addTo(map);
+        viewMarker.on('drag', function(e) { var pos = e.target.getLatLng(); viewLocation.lat = pos.lat; viewLocation.lng = pos.lng; radiusCircle.setLatLng(pos); });
+        viewMarker.on('dragend', function(e) { var pos = e.target.getLatLng(); viewLocation.lat = pos.lat; viewLocation.lng = pos.lng; radiusCircle.setLatLng(pos); refreshViewIcon(); updateUI(); applyFilters(); });
+      } else { viewMarker.setLatLng([lat, lng]); }
+      radiusCircle.setLatLng([lat, lng]);
+      map.setView(viewLocation, 13); adaptSlidersToZoom();
+      document.getElementById('viewRangeRow').style.display = 'flex';
+      refreshViewIcon(); updateUI(); applyFilters();
+    }
+
     function refreshViewIcon() {
       if(!viewMarker) return;
+      var isReal = realLocation && getDist(viewLocation, realLocation) < 0.1;
       var el = viewMarker.getElement();
-      if(el) {
-        var isReal = getDist(viewLocation, realLocation) < 0.1;
-        el.innerHTML = isReal ? '🔵' : '👁️';
-        el.className = 'gc-view-marker' + (isReal ? '' : ' pulse');
-      }
+      if(el) { el.innerHTML = isReal ? '🔵' : '👁️'; el.className = 'gc-view-marker' + (isReal ? '' : ' pulse'); }
     }
 
     if(navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(function(p) { 
-        realLocation.lat = p.coords.latitude; realLocation.lng = p.coords.longitude;
-        viewLocation.lat = realLocation.lat; viewLocation.lng = realLocation.lng;
-        viewMarker.setLatLng([viewLocation.lat, viewLocation.lng]);
-        radiusCircle.setLatLng([viewLocation.lat, viewLocation.lng]);
-        refreshViewIcon(); updateUI(); applyFilters(); 
-      }, function() { updateUI(); applyFilters(); });
-    } else { updateUI(); applyFilters(); }
+      navigator.geolocation.getCurrentPosition(function(p) { initLocation(p.coords.latitude, p.coords.longitude, true); }, function() { map.setView([0,0], 2); document.getElementById('viewLocationInfo').innerHTML = '📍 <span style="color:var(--warning)">GPS denied. Click map to start.</span>'; });
+    } else { document.getElementById('viewLocationInfo').innerHTML = '📍 Geolocation unsupported.'; }
 
     map.on('click', function(e) { 
-      setActive(null);
-      viewLocation.lat = e.latlng.lat; viewLocation.lng = e.latlng.lng;
+      if(!viewLocation) { initLocation(e.latlng.lat, e.latlng.lng, false); return; }
+      setActive(null); viewLocation.lat = e.latlng.lat; viewLocation.lng = e.latlng.lng;
       postTarget = { lat: viewLocation.lat, lng: viewLocation.lng, itemId: null };
-      viewMarker.setLatLng([viewLocation.lat, viewLocation.lng]);
-      radiusCircle.setLatLng([viewLocation.lat, viewLocation.lng]);
-      radiusCircle.setRadius(viewRadius * 1000);
-      refreshViewIcon(); updateUI(); applyFilters(); 
-      openModal(); 
+      viewMarker.setLatLng(viewLocation); radiusCircle.setLatLng(viewLocation); radiusCircle.setRadius(viewRadius * 1000);
+      refreshViewIcon(); updateUI(); applyFilters(); openModal(); 
     });
 
-    // 🔧 ADVANCED HIGHLIGHTING: Handles regular messages & captured fallbacks
     window.setActive = function(id) {
-      activeId = id;
-      var targetItem = findItem(id);
-      
-      // If clicked item is captured but outside current view range, highlight parent sub instead
-      if(targetItem && targetItem.category !== 'subscription') {
-        var isCaptured = false;
+      if(!id) { activeId = null; selectedRangeCircle.setRadius(0); applyFilters(); return; }
+      var target = findItem(id); if(!target) return;
+      var newTab = target.category === 'subscription' ? 'subscriptions' : 'messages';
+      if(newTab === 'messages') {
         for(var i=0; i<items.length; i++) {
-          if(items[i].category === 'subscription' && items[i].range > 0) {
-            var distToSub = getDist(items[i], targetItem);
-            if(distToSub <= items[i].range) {
-              isCaptured = true;
-              // If not in range, switch to subs tab and activate the subscription
-              var dToMe = getDist(viewLocation, targetItem);
-              if(dToMe > viewRadius) {
-                switchTab('subscriptions');
-                activeId = items[i].id;
-              }
-              break;
-            }
+          var s = items[i];
+          if(s.category === 'subscription' && s.range > 0 && !s.isFromBubble && getDist(s, target) <= s.range) {
+            if(getDist(viewLocation, target) > viewRadius) { target = s; id = s.id; newTab = 'subscriptions'; break; }
           }
         }
       }
-
-      applyFilters();
-      if(activeId) {
-        requestAnimationFrame(function() {
-          var el = document.querySelector('.card[data-id="' + activeId + '"]');
-          if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          var mapItem = findItem(activeId);
-          if(mapItem) map.panTo([mapItem.lat, mapItem.lng], {animate: true});
-        });
+      activeId = id;
+      if(currentTab !== newTab) {
+        currentTab = newTab;
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(newTab === 'messages' ? '.tab:first-child' : '.tab.subs').classList.add('active');
+        document.getElementById('viewRangeRow').style.display = newTab === 'messages' ? 'flex' : 'none';
       }
+      selectedRangeCircle.setLatLng([target.lat, target.lng]);
+      selectedRangeCircle.setRadius(target.range > 0 ? target.range * 1000 : 0);
+      applyFilters();
+      requestAnimationFrame(() => {
+        var el = document.querySelector('.card[data-id="' + activeId + '"]');
+        if(el) { el.classList.add('active'); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        map.panTo([target.lat, target.lng], {animate: true});
+      });
     };
 
     window.centerMapOnItem = function(id) { setActive(id); };
-    window.turnIntoBubble = function(id) {
-      var item = findItem(id);
-      if(item) { item.isThread = true; saveData(); applyFilters(); }
-    };
-    window.toggleRangeEditor = function(id) {
-      rangeEditorsOpen[id] = !rangeEditorsOpen[id];
-      applyFilters();
-    };
+    window.turnIntoBubble = function(id) { var i = findItem(id); if(i) { i.isThread = true; saveData(); applyFilters(); } };
+    window.toggleRangeEditor = function(id) { rangeEditorsOpen[id] = !rangeEditorsOpen[id]; applyFilters(); };
     window.setRangeValue = function(id, val) {
-      var num = parseFloat(val);
-      if(isNaN(num) || num < 0) num = 0;
-      var item = findItem(id);
-      if(item) {
-        item.range = Math.round(num * 100) / 100;
-        saveData();
-        var slider = document.getElementById('range-slider-' + id);
-        var input = document.getElementById('range-num-' + id);
-        var label = document.getElementById('range-label-' + id);
-        if(slider) slider.value = num;
-        if(input) input.value = num;
-        if(label) label.textContent = num.toFixed(2) + ' km';
+      var newKm = percentToKm(parseFloat(val), currentItemMaxKm); var item = findItem(id); if(item) {
+        item.range = Math.round(newKm * 100) / 100; saveData();
+        var slider = document.getElementById('range-slider-' + id); if(slider) slider.value = parseFloat(val);
+        var num = document.getElementById('range-num-' + id); if(num) num.value = item.range.toFixed(2);
+        var lbl = document.getElementById('range-label-' + id); if(lbl) lbl.textContent = item.range.toFixed(2) + ' km';
       }
+    };
+    window.setRangeValueFromNum = function(id, val) {
+      var num = parseFloat(val); if(isNaN(num)) return; if(num > currentItemMaxKm) num = currentItemMaxKm; if(num < 0) num = 0;
+      var item = findItem(id); if(item) { item.range = num; saveData(); var slider = document.getElementById('range-slider-' + id); if(slider) slider.value = kmToPercent(num, currentItemMaxKm); var lbl = document.getElementById('range-label-' + id); if(lbl) lbl.textContent = num.toFixed(2) + ' km'; }
     };
     window.applyRangeChange = function(id) { applyFilters(); };
-    window.editSubscription = function(id) {
-      var item = findItem(id);
-      if(!item) return;
-      var newTitle = prompt("Edit subscription title:", item.title);
-      if(newTitle && newTitle.trim()) { item.title = newTitle.trim(); saveData(); applyFilters(); }
-    };
-    window.deleteSubscription = function(id) {
-      if(!confirm("Delete this subscription? Captured messages will remain as standalone items.")) return;
-      var idx = items.findIndex(function(i){ return i.id === id; });
-      if(idx !== -1) { items.splice(idx, 1); delete rangeEditorsOpen[id]; saveData(); applyFilters(); }
+    
+    window.subscribeToBubble = function(id) {
+      var item = findItem(id); if(!item) return;
+      items.push({ 
+        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), lat: item.lat, lng: item.lng, range: item.range, 
+        isThread: false, category: 'subscription', title: item.title, messages: [], isFromBubble: true, sourceBubbleId: id,
+        allowedTags: allTags,
+        createdAt: toSec(Date.now()),
+        viewLog: {}
+      });
+      saveData(); switchTab('subscriptions'); applyFilters();
     };
 
+    window.editSubscription = function(id) { var i = findItem(id); if(!i) return; var t = prompt("Edit title:", i.title); if(t && t.trim()) { i.title = t.trim(); saveData(); applyFilters(); } };
+    window.deleteSubscription = function(id) { if(!confirm("Delete this subscription?")) return; var idx = items.findIndex(x => x.id === id); if(idx > -1) { items.splice(idx, 1); delete rangeEditorsOpen[id]; saveData(); applyFilters(); } };
     window.openModal = function(itemId) {
-      var modal = document.getElementById('addModal');
-      var title = document.getElementById('modalTitle');
-      if(itemId) {
-        var item = findItem(itemId);
-        title.textContent = '➕ Add to Thread: ' + (item ? item.title : 'Item');
-        postTarget = { lat: item.lat, lng: item.lng, itemId: itemId };
-      } else { title.textContent = '📝 Leave a Message'; }
-      modal.classList.remove('hidden');
+      var m = document.getElementById('addModal'), t = document.getElementById('modalTitle');
+      if(itemId) { var i = findItem(itemId); t.textContent = '➕ Add to Thread: ' + (i?i.title:''); postTarget = { lat: i.lat, lng: i.lng, itemId: itemId }; }
+      else t.textContent = '📝 Leave a Message'; m.classList.remove('hidden');
     };
 
-    function renderMap(allVisible) {
+    document.getElementById('viewRadius').addEventListener('input', function(e) { viewRadius = percentToKm(parseFloat(e.target.value), currentMaxKm); document.getElementById('radiusVal').textContent = fmtDist(viewRadius); radiusCircle.setRadius(viewRadius * 1000); if(!document.getElementById('showAll').checked) applyFilters(); });
+    document.getElementById('time').addEventListener('input', function(e) { viewTimeH = minTimeH * Math.pow(maxTimeH/minTimeH, e.target.value/100); applyFilters(); });
+
+    function renderMap(all) {
       markersLayer.clearLayers();
-      var iconMap = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',subscription:'📡'};
-      var subRangeColor = '#f87171';
-
-      for(var i=0; i<allVisible.length; i++) {
-        var item = allVisible[i];
-        if(item.category === 'subscription' && item.range > 0) {
-          L.circle([item.lat, item.lng], {
-            radius: item.range * 1000, color: subRangeColor, fillColor: subRangeColor,
-            fillOpacity: 0.12, weight: 2, dashArray: '5, 5'
-          }).addTo(markersLayer);
-        }
-      }
-
-      for(var i=0; i<allVisible.length; i++) {
-        var item = allVisible[i];
-        if(!item.lat || !item.lng) continue;
-        
-        var isSub = item.category === 'subscription';
-        var isActive = item.id === activeId;
-        var isCaptured = !!item._isCaptured;
-        
-        var html = iconMap[item.category] || '📍';
-        var cls = 'gc-msg-icon' + (isSub ? ' gc-sub-icon' : '') + (isActive ? ' active' : '') + (isCaptured ? ' gc-captured' : '');
-        
-        var popup = isSub 
-          ? '<b>'+item.title+'</b><br>📡 Subscription<br>📏 Range: '+item.range.toFixed(2)+'km<br>📥 Captured: '+item.capturedCount+' msgs'
-          : (item.isThread 
-            ? '<b>'+item.title+'</b><br>🎈 '+item.messages.length+' msgs<br>📏 Range: '+item.range.toFixed(2)+'km' 
-            : '<b>'+item.author+'</b><br>'+item.messages[0].text);
-            
-        var marker = L.marker([item.lat, item.lng], {
-          icon: L.divIcon({className: cls, html: html, iconSize:[26,26], iconAnchor:[13,13]}),
-          draggable: isSub
-        }).bindPopup(popup).addTo(markersLayer);
-        
-        (function(cur, isS) {
-          if(isS) {
-            marker.on('dragend', function(e) {
-              var p = e.target.getLatLng();
-              var orig = findItem(cur.id);
-              if(orig) { orig.lat = p.lat; orig.lng = p.lng; }
-              saveData(); applyFilters();
-            });
-          }
-          marker.on('click', function(e) {
-            L.DomEvent.stopPropagation(e);
-            if(isS) {
-              var d = getDist(viewLocation, cur);
-              switchTab(d <= viewRadius ? 'messages' : 'subscriptions');
-            }
-            setActive(cur.id);
-          });
-        })(item, isSub);
-      }
+      var ico = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',subscription:'📡'};
+      var col = '#f87171';
+      all.forEach(item => { if(item.category === 'subscription' && item.range > 0 && (!item.isFromBubble || item.id === activeId)) L.circle([item.lat,item.lng],{radius:item.range*1000,color:col,fillColor:col,fillOpacity:0.12,weight:2,dashArray:'5,5'}).addTo(markersLayer); });
+      all.forEach(item => {
+        if(!item.lat||!item.lng||item.isFromBubble) return;
+        var s = item.category==='subscription', act = item.id===activeId, cap = item._isCaptured;
+        var h = ico[item.category]||'📍', c = 'gc-msg-icon'+(s?' gc-sub-icon':'')+(act?' active':'')+(cap?' gc-captured':'');
+        var pop = s?'<b>'+item.title+'</b><br>📏 Range: '+item.range.toFixed(2)+'km' : (item.isThread?'<b>'+item.title+'</b><br>🎈 '+item.messages.length+' msgs<br>📏 Range: '+item.range.toFixed(2)+'km' : '<b>'+item.author+'</b><br>'+item.messages[0].text);
+        var m = L.marker([item.lat,item.lng],{icon:L.divIcon({className:c,html:h,iconSize:[26,26],iconAnchor:[13,13]}),draggable:s&&!item.isFromBubble}).bindPopup(pop).addTo(markersLayer);
+        m.on('dragend', e => { var p=e.target.getLatLng(), o=findItem(item.id); if(o){o.lat=p.lat;o.lng=p.lng;} saveData(); applyFilters(); });
+        m.on('click', e => { L.DomEvent.stopPropagation(e); setActive(item.id); });
+      });
     }
 
-    function renderList(displayItems) {
+    function renderList(all) {
       var el = document.getElementById('content'); el.innerHTML = '';
-      if(!displayItems.length) {
-        el.innerHTML = '<p class="empty">' + (currentTab === 'subscriptions' ? 'No subscription bubbles.' : 'No messages in current range.') + '</p>'; 
-        return;
-      }
-
-      for(var k=0; k<displayItems.length; k++) {
-        (function(item) {
-          var isSub = item.category === 'subscription';
-          var card = document.createElement('div');
-          card.className = 'card ' + (isSub ? 'subscription' : '');
-          card.dataset.id = item.id;
-          if(item.id === activeId) card.classList.add('active');
-
-          var dist = fmtDist(item._dist);
-          var html = '<div class="msg-header"><span class="category-badge '+(isSub?'subscription':item.category)+'">'+(isSub?'📡 Subscription':(item.isThread?'🎈 Thread':'💬 Message'))+'</span><span class="distance">📏 '+dist+'</span></div>';
-
-          if(isSub) {
-            html += '<p class="msg-text" style="font-weight:500">'+item.title+'</p>';
-            var isSelected = item.id === activeId;
-            var isEditorOpen = rangeEditorsOpen[item.id];
+      if(!all.length) { el.innerHTML = '<p class="empty">'+(currentTab==='subscriptions'?'No subscription bubbles.':'No messages in current range.')+'</p>'; return; }
+      all.forEach(item => {
+        var s = item.category==='subscription';
+        var card = document.createElement('div');
+        card.className = 'card'+(s?(item.isFromBubble?' subscription bubble-sub':' subscription'):'');
+        card.dataset.id = item.id;
+        if(item.id === activeId) card.classList.add('active');
+        var d = fmtDist(item._dist);
+        var cm = {general:'💬 General',question:'❓ Question',event:'🎉 Event',warning:'⚠️ Warning'};
+        var bt = s?(item.isFromBubble?'🎈 Subscribed Bubble':'📡 Subscription'):(cm[item.category]||'💬 Message')+(item.isThread?' Thread':'');
+        var h = '<div class="msg-header"><span class="category-badge '+(s?'subscription':item.category)+'">'+bt+'</span><span class="distance">📏 '+d+'</span></div>';
+        
+        if(s) {
+          h += '<p class="msg-text" style="font-weight:500">'+item.title+'</p>';
+          if(item.id===activeId) {
+            var rc = item.isFromBubble?'<button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️ Edit</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️ Delete</button><span style="font-size:0.75rem;color:var(--muted);align-self:center">📥 Locked</span>':'<button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️ Range</button><button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️ Edit</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️ Delete</button><span style="font-size:0.75rem;color:var(--muted);align-self:center">📥 '+item.capturedCount+' msgs</span>';
+            h += '<div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;">'+rc+'</div>';
             
-            if(isSelected) {
-              html += '<div style="display:flex; gap:6px; margin:6px 0; flex-wrap:wrap;">'
-                + '<button class="action-btn" onclick="event.stopPropagation(); toggleRangeEditor(\''+item.id+'\')">⚙️ Range</button>'
-                + '<button class="action-btn" onclick="event.stopPropagation(); editSubscription(\''+item.id+'\')">✏️ Edit</button>'
-                + '<button class="action-btn danger" onclick="event.stopPropagation(); deleteSubscription(\''+item.id+'\')">🗑️ Delete</button>'
-                + '<span style="font-size:0.75rem;color:var(--muted);align-self:center">📥 '+item.capturedCount+' msgs</span></div>';
-              
-              if(isEditorOpen) {
-                html += '<div class="range-editor open" id="range-editor-'+item.id+'" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()">'
-                  + '<label>Capture Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label>'
-                  + '<div class="range-input-group">'
-                  + '<input type="range" min="0" max="500" step="0.05" value="'+item.range+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\', this.value)" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()">'
-                  + '<input type="number" min="0" max="500" step="0.05" value="'+item.range+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\', this.value); applyRangeChange(\''+item.id+'\')" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()">'
-                  + '</div></div>';
-              }
-            } else {
-              html += '<div style="font-size:0.75rem;color:var(--muted);margin:6px 0">📥 '+item.capturedCount+' messages captured</div>';
-            }
-            
-            if(item.capturedMessages && item.capturedMessages.length > 0) {
-              for(var j=0; j<item.capturedMessages.length; j++) {
-                var cm = item.capturedMessages[j];
-                html += '<div class="sub-item" onclick="event.stopPropagation(); centerMapOnItem(\''+cm.sourceId+'\')">'
-                  + '<div class="sub-source">📍 From: '+cm.sourceTitle+' ('+fmtDist(cm.distance)+')</div>'
-                  + '<div class="meta">👤 '+cm.author+' · '+new Date(cm.timestamp).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'
-                  + cm.text + '</div>';
-              }
-            } else if(isSelected) {
-              html += '<div style="padding:10px;text-align:center;color:var(--muted);font-size:0.85rem">No messages captured yet.</div>';
-            }
-          } else {
-            if(item.isThread) {
-              html += '<p class="msg-text" style="font-weight:500">'+item.title+'</p>';
-              var isExpanded = item.id === activeId;
-              var isEditorOpen = rangeEditorsOpen[item.id];
-              if(isExpanded) {
-                html += '<div style="display:flex; gap:6px; margin:6px 0;">'
-                  + '<button class="action-btn" onclick="event.stopPropagation(); toggleRangeEditor(\''+item.id+'\')">⚙️ Range</button>'
-                  + '<button class="action-btn" onclick="event.stopPropagation(); openModal(\''+item.id+'\')">➕ Add message</button>'
-                  + '<span style="font-size:0.75rem;color:var(--muted);align-self:center">💬 '+item.messages.length+' msgs</span></div>';
-                if(isEditorOpen) {
-                  html += '<div class="range-editor open" id="range-editor-'+item.id+'" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()">'
-                    + '<label>Visibility Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label>'
-                    + '<div class="range-input-group">'
-                    + '<input type="range" min="0" max="500" step="0.05" value="'+item.range+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\', this.value)" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()">'
-                    + '<input type="number" min="0" max="500" step="0.05" value="'+item.range+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\', this.value); applyRangeChange(\''+item.id+'\')" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()">'
-                    + '</div></div>';
-                }
-              } else {
-                html += '<div style="font-size:0.75rem;color:var(--muted);margin:6px 0">💬 '+item.messages.length+' msgs</div>';
-              }
-              if(item.messages && item.messages.length > 0) {
-                for(var j=0; j<item.messages.length; j++) {
-                  var m = item.messages[j];
-                  var isOrig = j === 0;
-                  html += '<div class="sub-item '+(isOrig?'original':'')+'" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
-                    + (isOrig ? '<div style="font-size:0.7rem;color:var(--primary);margin-bottom:2px">📍 Original</div>' : '')
-                    + '<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'
-                    + m.text + '</div>';
-                }
-              }
-            } else {
-              var m = item.messages[0];
-              html += '<div class="msg-entry" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
-                + '<p class="msg-text" style="margin-bottom:2px">'+m.text+'</p>'
-                + '<div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div></div>';
-              html += '<button class="action-btn" style="margin-top:6px;" onclick="event.stopPropagation(); turnIntoBubble(\''+item.id+'\')">🎈 Turn into Bubble</button>';
-            }
-          }
+            var tags = item.allowedTags || [];
+            var tagIcons = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',new:'✨'};
+            h += '<div style="margin-top:6px;padding:6px;background:#f9fafb;border-radius:6px;font-size:0.75rem;"><div style="margin-bottom:4px;font-weight:500;color:var(--muted);">🎛️ Filters:</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
+            allTags.forEach(t => {
+              var checked = tags.includes(t) ? 'checked' : '';
+              var icon = tagIcons[t] || '•';
+              h += '<label style="cursor:pointer;display:flex;align-items:center;gap:2px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--card);"><input type="checkbox" '+checked+' onclick="event.stopPropagation();window.toggleSubTag(\''+item.id+'\',\''+t+'\')"> '+icon+' '+t.charAt(0).toUpperCase() + t.slice(1)+'</label>';
+            });
+            h += '</div></div>';
 
-          card.innerHTML = html;
-          card.onclick = function(e) {
-            if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.closest('.range-editor') || e.target.closest('.sub-item')) return;
-            setActive(item.id);
-          };
-          el.appendChild(card);
-        })(displayItems[k]);
-      }
+            if(rangeEditorsOpen[item.id] && !item.isFromBubble) {
+              var pct = kmToPercent(item.range, currentItemMaxKm);
+              h += '<div class="range-editor open" onclick="event.stopPropagation()">'+'<label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group">'+'<input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)">'+'<input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValueFromNum(\''+item.id+'\',this.value);applyRangeChange(\''+item.id+'\')">'+'</div></div>';
+            }
+          } else h += '<div style="font-size:0.75rem;color:var(--muted);margin:6px 0">'+(item.isFromBubble?'📥 Locked':'📥 '+item.capturedCount+' msgs')+'</div>';
+          
+          if(item.isFromBubble && item._bubbleContent) { h += '<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);">'+getBubbleInnerHTML(item._bubbleContent, false)+'</div>'; }
+          else if(item.capturedGroups) { h += '<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:12px;">'; item.capturedGroups.forEach((g,gi) => { h += getBubbleInnerHTML({id:g.sourceId, category:g.messages[0]?.category||'general', isThread:g.messages.length>1, title:g.sourceTitle, messages:g.messages, _dist:g.distance}, g.messages[0]?g.messages[0].isNew:false); if(gi < item.capturedGroups.length-1) h+='<div style="height:1px;background:var(--border);margin:4px 0;"></div>'; }); h+='</div>'; }
+          else if(item.id===activeId && !item.isFromBubble) h += '<div style="padding:10px;text-align:center;color:var(--muted);font-size:0.85rem">No messages match filters.</div>';
+        } else {
+          if(item.isThread) {
+            h += '<p class="msg-text" style="font-weight:500">'+item.title+'</p><button class="action-btn" style="margin-top:6px;margin-right:6px;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Subscribe</button>';
+            if(item.id===activeId) { h += '<div style="display:flex;gap:6px;margin:6px 0;"><button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️ Range</button><button class="action-btn" onclick="event.stopPropagation();openModal(\''+item.id+'\')">➕ Add</button><span style="font-size:0.75rem;color:var(--muted);align-self:center">💬 '+item.messages.length+'</span></div>'; if(rangeEditorsOpen[item.id]) { var pct = kmToPercent(item.range, currentItemMaxKm); h+='<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group"><input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)"><input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValueFromNum(\''+item.id+'\',this.value);applyRangeChange(\''+item.id+'\')"></div></div>'; } } else h += '<div style="font-size:0.75rem;color:var(--muted);margin:6px 0">💬 '+item.messages.length+' msgs</div>';
+            if(item.messages) item.messages.forEach((m,j)=>{ h+='<div class="sub-item'+(j===0?' original':'')+'" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')">'+(j===0?'<div style="font-size:0.7rem;color:var(--primary);margin-bottom:2px">📍 Original</div>':'')+'<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+m.text+'</div>'; });
+          } else { var m = item.messages[0]; h+='<div class="msg-entry" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')"><p class="msg-text" style="margin-bottom:2px">'+m.text+'</p><div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div></div><button class="action-btn" style="margin-top:6px;" onclick="event.stopPropagation();turnIntoBubble(\''+item.id+'\')">🎈 Turn into Bubble</button>'; }
+        }
+        card.innerHTML = h; card.onclick = e => { if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.closest('.range-editor')||e.target.closest('.sub-item')||e.target.closest('.msg-entry')) return; setActive(item.id); }; el.appendChild(card);
+      });
     }
 
     function applyFilters() {
-      var showAll = document.getElementById('showAll').checked;
-      var category = document.getElementById('categoryFilter').value;
-      var userRadius = showAll ? Infinity : viewRadius;
-      document.getElementById('radiusVal').textContent = showAll ? '∞' : fmtDist(userRadius);
-
-      var timeInput = parseFloat(document.getElementById('time').value);
-      var hours = sliderToTime(timeInput);
-      document.getElementById('timeVal').textContent = fmtTime(hours);
-      var cutoff = Date.now() - (hours * 3600000);
-
-      var capturedSourceIds = new Set();
-      var allSubs = [];
-      var allMessagesForMap = [];
-      var allMessagesForList = [];
-
-      // 1. Process Subscriptions (Always visible on map)
-      for(var i=0; i<items.length; i++) {
-        var item = items[i];
-        if(item.category === 'subscription') {
-          var d = getDist(viewLocation, item);
-          var captured = [];
-          for(var k=0; k<items.length; k++) {
-            var source = items[k];
-            if(source.id === item.id || source.category === 'subscription') continue;
-            var distToSource = getDist(item, source);
-            if(distToSource <= item.range) {
-              capturedSourceIds.add(source.id);
-              for(var m=0; m<source.messages.length; m++) {
-                var msg = source.messages[m];
-                if(msg.timestamp >= cutoff) {
-                  captured.push({ text: msg.text, author: msg.author, timestamp: msg.timestamp, category: msg.category, sourceTitle: source.title, sourceId: source.id, distance: distToSource });
-                }
-              }
-            }
-          }
-          captured.sort(function(a,b) { return b.timestamp - a.timestamp; });
-          allSubs.push(Object.assign({}, item, {_dist: d, capturedMessages: captured, capturedCount: captured.length}));
-        }
-      }
-
-      // 2. Process Messages
-      for(var i=0; i<items.length; i++) {
-        var item = items[i];
-        if(item.category === 'subscription') continue;
-        var validMsgs = [];
-        for(var j=0; j<item.messages.length; j++) {
-          if(item.messages[j].timestamp >= cutoff) validMsgs.push(item.messages[j]);
-        }
-        if(validMsgs.length === 0) continue;
-
-        var d = getDist(viewLocation, item);
-        var catMatch = category === 'all' || item.category === category;
-        var isCaptured = capturedSourceIds.has(item.id);
-
-        // LOGIC: Map shows items if they are IN RANGE or CAPTURED
-        if((d <= userRadius || isCaptured) && catMatch) {
-          allMessagesForMap.push(Object.assign({}, item, {_dist: d, messages: validMsgs, _isCaptured: isCaptured}));
-        }
-
-        // LOGIC: List shows items ONLY if IN RANGE
-        if(d <= userRadius && catMatch) {
-          allMessagesForList.push(Object.assign({}, item, {_dist: d, messages: validMsgs, _isCaptured: isCaptured}));
-        }
-      }
-
-      var mapItems = allMessagesForMap.concat(allSubs);
-      renderMap(mapItems);
+      var sa = document.getElementById('showAll').checked, cat = document.getElementById('categoryFilter').value;
+      var ur = sa ? Infinity : viewRadius; document.getElementById('radiusVal').textContent = sa ? '∞' : fmtDist(ur);
+      document.getElementById('timeVal').textContent = fmtTime(viewTimeH);
       
-      var listItems = currentTab === 'subscriptions' ? allSubs : allMessagesForList;
-      listItems.sort(function(a,b){return a._dist - b._dist;});
-      renderList(listItems);
-      
-      radiusCircle.setRadius(showAll ? 200000000 : userRadius * 1000);
-    }
+      var now = toSec(Date.now());
+      var cut = now - (viewTimeH * 3600);
+      var capIds = new Set(), subs = [], msgs = [], mapMsgs = [];
 
-    function updateUI() {
-      var isReal = getDist(viewLocation, realLocation)<0.1;
-      document.getElementById('viewLocationInfo').innerHTML = isReal
-        ? '📍 Viewing from: <span class="highlight">Your GPS</span>'
-        : '👁️ Viewing from: <span class="highlight">'+viewLocation.lat.toFixed(4)+', '+viewLocation.lng.toFixed(4)+'</span>';
-      document.getElementById('returnBtn').classList.toggle('hidden', isReal);
-    }
+      items.forEach(it => { 
+        if(it.category!=='subscription') return; 
+        if(!it.viewLog) it.viewLog = {};
+        if(!it.allowedTags) it.allowedTags = allTags.slice();
+        if(!it.createdAt) it.createdAt = toSec(Date.now());
 
-    document.getElementById('time').addEventListener('input', function(e) { applyFilters(); });
-    document.getElementById('categoryFilter').addEventListener('change', function(e) { applyFilters(); });
-    document.getElementById('showAll').addEventListener('change', function(e) { applyFilters(); });
-    document.getElementById('refreshBtn').addEventListener('click', function() { applyFilters(); });
-    document.getElementById('returnBtn').addEventListener('click', function() { 
-      if(navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(function(p) {
-          realLocation.lat = p.coords.latitude; realLocation.lng = p.coords.longitude;
-          viewLocation.lat = realLocation.lat; viewLocation.lng = realLocation.lng;
-          viewMarker.setLatLng([viewLocation.lat, viewLocation.lng]);
-          radiusCircle.setLatLng([viewLocation.lat, viewLocation.lng]);
-          refreshViewIcon(); updateUI(); applyFilters(); map.panTo(viewLocation, {animate:true});
-        });
-      } else { 
-        viewLocation.lat = realLocation.lat; viewLocation.lng = realLocation.lng;
-        viewMarker.setLatLng([viewLocation.lat, viewLocation.lng]);
-        radiusCircle.setLatLng([viewLocation.lat, viewLocation.lng]);
-        refreshViewIcon(); updateUI(); applyFilters(); map.panTo(viewLocation, {animate:true}); 
-      }
-    });
+        var d=getDist(viewLocation,it); 
+        if(it.isFromBubble && it.sourceBubbleId){ var sb=findItem(it.sourceBubbleId); if(sb)it._bubbleContent=sb; } 
+        else { 
+          var cg={}; 
+          items.forEach(sc=>{ 
+            if(sc.id===it.id||sc.category==='subscription')return; 
+            var ds=getDist(it,sc); 
+            if(ds<=it.range){ 
+              var v=[]; 
+              sc.messages.forEach(m=>{ 
+                m.timestamp = toSec(m.timestamp);
+                if(m.timestamp>=cut) {
+                  var isMarkerNew = toSec(sc.createdAt) >= it.createdAt;
+                  if (!it.viewLog[sc.id]) it.viewLog[sc.id] = now;
+                  var firstSeen = it.viewLog[sc.id];
+                  var isSeenRecently = (now - firstSeen) < 86400;
+                  var isNew = isMarkerNew && isSeenRecently;
+                  m.isNew = isNew;
 
-    document.getElementById('viewRadius').addEventListener('input', function(e) {
-      var val = parseFloat(e.target.value);
-      document.getElementById('viewRadiusNum').value = val.toFixed(2);
-      viewRadius = val;
-      if(!document.getElementById('showAll').checked) applyFilters();
-      radiusCircle.setRadius(viewRadius * 1000);
-    });
+                  var tags = it.allowedTags || [];
+                  var isCatMatch = tags.length === 0 || tags.includes(m.category);
+                  var isNewMatch = !tags.includes('new') || isNew;
 
-    document.getElementById('viewRadiusNum').addEventListener('change', function(e) {
-      var val = parseFloat(e.target.value);
-      if(isNaN(val) || val < 0) val = 0;
-      if(val > 500) val = 500;
-      viewRadius = Math.round(val * 100) / 100;
-      document.getElementById('viewRadius').value = viewRadius;
-      if(!document.getElementById('showAll').checked) applyFilters();
-      radiusCircle.setRadius(viewRadius * 1000);
-    });
-
-    document.getElementById('viewRadius').value = viewRadius;
-    document.getElementById('viewRadiusNum').value = viewRadius.toFixed(2);
-
-    document.getElementById('cancelBtn').onclick = function() { document.getElementById('addModal').classList.add('hidden'); };
-    document.getElementById('submitBtn').onclick = function() {
-      var text = document.getElementById('msgText').value.trim(); 
-      if(!text) return alert('Enter a message');
-      var cat = document.getElementById('msgCategory').value;
-      var newMsg = { 
-        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), 
-        lat: postTarget.lat, lng: postTarget.lng, 
-        text: text, category: cat, 
-        author:'User_'+Math.floor(Math.random()*9000+1000), 
-        timestamp:Date.now() 
-      };
-      
-      if(postTarget.itemId) {
-        var item = findItem(postTarget.itemId);
-        if(item && item.category !== 'subscription') {
-          item.messages.push(newMsg);
-          item.title = item.messages[0].text.length > 20 ? item.messages[0].text.substring(0, 20) + '…' : item.messages[0].text;
-        }
-      } else {
-        items.push({ 
-          id: newMsg.id, lat: postTarget.lat, lng: postTarget.lng, 
-          range: cat === 'subscription' ? viewRadius : 0, 
-          isThread: false, category: cat, 
-          title: text.length > 20 ? text.substring(0, 20) + '…' : text, 
-          messages: cat === 'subscription' ? [] : [newMsg] 
-        });
-      }
-      document.getElementById('addModal').classList.add('hidden'); 
-      document.getElementById('msgText').value=''; 
-      postTarget = {lat:null,lng:null,itemId:null}; 
-      saveData(); applyFilters();
-    };
-
-    document.getElementById('demoBtn').addEventListener('click', function() {
-      if(items.length>10 && !confirm('Replace data?')) return;
-      var cats=['general','question','event','warning'];
-      var texts=['Coffee spot ☕','Park open?','Concert 8PM 🎵','Road closed ⚠️','Sunset view 🌅','Walk anyone?','Traffic 🚗','Market 🛍️','Lost dog 🐕','Performer 🎻'];
-      var demoItems = [];
-      for(var i=0;i<12;i++) {
-        var dist=[0.1,1,5,30,100][Math.floor(Math.random()*5)], angle=Math.random()*Math.PI*2;
-        var dLat=(dist/111.32)*Math.cos(angle), dLng=(dist/(111.32*Math.cos(viewLocation.lat*Math.PI/180)))*Math.sin(angle);
-        var txt = texts[Math.floor(Math.random()*texts.length)];
-        demoItems.push({ 
-          id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), 
-          lat:viewLocation.lat+dLat, lng:viewLocation.lng+dLng, range:0, isThread:false, 
-          category:cats[Math.floor(Math.random()*cats.length)], 
-          title: txt.length>20?txt.substring(0,20)+'…':txt, 
-          messages:[{id:crypto.randomUUID(), text:txt, category:cats[Math.floor(Math.random()*cats.length)], author:'Demo_'+(i+1), timestamp:Date.now()-Math.floor(Math.random()*86400000*7)}] 
-        });
-      }
-      demoItems.push({ 
-        id: crypto.randomUUID(), lat: viewLocation.lat, lng: viewLocation.lng, 
-        range: viewRadius, isThread: false, category: 'subscription', 
-        title: 'Local News Feed 📡', messages: [] 
+                  if(isCatMatch && isNewMatch) {
+                    v.push(m); capIds.add(sc.id);
+                  }
+                } 
+              }); 
+              if(v.length){v.sort((a,b)=>b.timestamp-a.timestamp);cg[sc.id]={sourceId:sc.id,sourceTitle:sc.title,distance:ds,messages:v};} 
+            } 
+          }); 
+          var ga=Object.values(cg).sort((a,b)=>a.distance-b.distance); var tc=0; ga.forEach(g=>tc+=g.messages.length); 
+          it.capturedGroups=ga; it.capturedCount=tc; 
+        } 
+        subs.push(Object.assign({},it,{_dist:d})); 
       });
-      items = demoItems; saveData(); applyFilters();
-    });
 
+      items.forEach(it => { if(it.category==='subscription')return; var vm=[]; it.messages.forEach(m=>{m.timestamp=toSec(m.timestamp);if(m.timestamp>=cut)vm.push(m);}); if(!vm.length)return; var d=getDist(viewLocation,it), cm=cat==='all'||it.category===cat, ic=capIds.has(it.id); if((d<=ur||ic)&&cm)mapMsgs.push(Object.assign({},it,{_dist:d,messages:vm,_isCaptured:ic})); if(d<=ur&&cm)msgs.push(Object.assign({},it,{_dist:d,messages:vm,_isCaptured:ic})); });
+      
+      renderMap(mapMsgs.concat(subs)); 
+      var li = currentTab==='subscriptions' ? subs : msgs; li.sort((a,b)=>a._dist-b._dist); 
+      renderList(li); 
+      radiusCircle.setRadius(sa?200000000:ur*1000);
+      saveData();
+    }
+
+    function updateUI() { var isR = realLocation && getDist(viewLocation, realLocation)<0.1; document.getElementById('viewLocationInfo').innerHTML = isR ? '📍 <span class="highlight">Your GPS</span>' : '👁️ <span class="highlight">'+(viewLocation?viewLocation.lat.toFixed(4)+', '+viewLocation.lng.toFixed(4):'Click map to start')+'</span>'; document.getElementById('returnBtn').style.display = isR && viewLocation ? 'none' : (realLocation ? 'block' : 'none'); }
+    document.getElementById('returnBtn').onclick = () => { if(realLocation){ viewLocation={...realLocation}; viewMarker.setLatLng(viewLocation); radiusCircle.setLatLng(viewLocation); radiusCircle.setRadius(viewRadius*1000); refreshViewIcon(); updateUI(); applyFilters(); map.panTo(viewLocation,{animate:true}); }};
+    document.getElementById('refreshBtn').onclick = () => applyFilters();
+    document.getElementById('cancelBtn').onclick = () => document.getElementById('addModal').classList.add('hidden');
+    document.getElementById('categoryFilter').onchange = () => applyFilters();
+    document.getElementById('showAll').onchange = e => { if(e.target.checked) { viewRadius=currentMaxKm; document.getElementById('viewRadius').value=100; document.getElementById('radiusVal').textContent='∞'; radiusCircle.setRadius(200000000); } applyFilters(); };
+    
+    document.getElementById('submitBtn').onclick = () => { 
+      var t=document.getElementById('msgText').value.trim(); if(!t)return alert('Enter text'); 
+      var c=document.getElementById('msgCategory').value; 
+      var nm={id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:postTarget.lat,lng:postTarget.lng,text:t,category:c,author:'User_'+Math.floor(Math.random()*9000+1000),timestamp:toSec(Date.now())}; 
+      if(postTarget.itemId){ var i=findItem(postTarget.itemId); if(i&&i.category!=='subscription'){i.messages.push(nm);i.title=i.messages[0].text.length>20?i.messages[0].text.substring(0,20)+'…':i.messages[0].text;}} 
+      else items.push({id:nm.id,lat:nm.lat,lng:nm.lng,range:c==='subscription'?viewRadius:0,isThread:false,category:c,title:t.length>20?t.substring(0,20)+'…':t,messages:c==='subscription'?[]:[nm], createdAt:nm.timestamp}); 
+      document.getElementById('addModal').classList.add('hidden');document.getElementById('msgText').value='';postTarget={lat:null,lng:null,itemId:null};saveData();applyFilters();
+    };
+    
+    document.getElementById('demoBtn').onclick = () => { 
+      if(items.length>10 && !confirm('Replace data?'))return; 
+      var cats=['general','question','event','warning'], txts=['Coffee ☕','Open?','Event 🎵','Alert ⚠️','View 🌅','Walk?','Traffic 🚗','Shop 🛍️','Dog 🐕','Music 🎻']; 
+      var di=[]; var nowSec = toSec(Date.now()); 
+      for(var i=0;i<12;i++){
+        var dist=[0.1,0.5,2,10,30][Math.floor(Math.random()*5)],ang=Math.random()*Math.PI*2; 
+        var dl=(dist/111.32)*Math.cos(ang),dln=(dist/(111.32*Math.cos(viewLocation.lat*Math.PI/180)))*Math.sin(ang); 
+        var t=txts[Math.floor(Math.random()*txts.length)]; 
+        var msgTs = nowSec - Math.floor(Math.random()*86400*7);
+        di.push({id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:viewLocation.lat+dl,lng:viewLocation.lng+dln,range:0,isThread:false,category:cats[Math.floor(Math.random()*cats.length)],title:t.length>20?t.substring(0,20)+'…':t, createdAt:msgTs, messages:[{id:crypto.randomUUID(),text:t,category:cats[Math.floor(Math.random()*cats.length)],author:'Demo_'+(i+1),timestamp:msgTs}]});
+      } 
+      di.push({id:crypto.randomUUID(),lat:viewLocation.lat,lng:viewLocation.lng,range:Math.min(5,currentItemMaxKm),isThread:false,category:'subscription',title:'Local Feed 📡',messages:[],allowedTags:allTags,createdAt:nowSec,viewLog:{}}); 
+      items=di;saveData();applyFilters();
+    };
+    
     function saveData() { localStorage.setItem('gc_items', JSON.stringify(items)); }
-    updateUI(); applyFilters();
+    initTimeSlider(); function initTimeSlider(){ var r=viewTimeH/minTimeH, mr=maxTimeH/minTimeH; document.getElementById('time').value=Math.min(100,Math.max(0,100*(Math.log(r)/Math.log(mr)))); document.getElementById('timeVal').textContent=fmtTime(viewTimeH); }
   </script>
 </body>
 </html>
