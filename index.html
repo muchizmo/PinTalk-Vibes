@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v59 - Mobile Drawer Fixes & Live Filters</title>
+  <title>GeoChat v60 - Fixed Drawer & Unified Scroll</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -18,7 +18,16 @@
     #map { flex: 1; height: 100%; z-index: 1; }
     #sidebar { width: 360px; background: var(--card); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; position: relative; }
     
-    /* 🔧 COMPACT HEADER */
+    .drag-handle {
+      position: fixed;
+      top: 8px; left: 50%; transform: translateX(-50%);
+      width: 36px; height: 4px; background: #cbd5e1; border-radius: 2px;
+      cursor: grab; z-index: 1002;
+      user-select: none; -webkit-user-select: none;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .drag-handle:active { background: #94a3b8; cursor: grabbing; }
+
     .sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--accent); gap: 8px; flex-shrink: 0; }
     .header-left { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
     .sidebar-header h2 { font-size: 1rem; margin: 0; white-space: nowrap; }
@@ -34,7 +43,7 @@
     .tab.subs { color: var(--sub); }
     .tab.subs.active { border-bottom-color: var(--sub); }
     
-    #filters { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    #filters { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--border); }
     .filter-row { display: flex; align-items: center; gap: 8px; }
     .filter-row span { font-size: 0.8rem; font-weight: 500; min-width: 40px; text-align: right; }
     .slider-container { flex: 1; }
@@ -45,8 +54,17 @@
     select, button { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); cursor: pointer; font-size: 0.85rem; }
     button:hover { background: #e5e7eb; }
     
-    /* 🔧 UNIFIED SCROLL CONTAINER */
-    .sheet-inner { flex: 1; overflow-y: auto; padding: 0; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; min-height: 0; display: flex; flex-direction: column; }
+    /* 🔧 UNIFIED SCROLL AREA */
+    .scrollable-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
     
     #content { flex: 1; padding: 8px 12px; }
     #sheet-footer { padding: 12px; text-align: center; border-top: 1px solid var(--border); flex-shrink: 0; }
@@ -107,7 +125,7 @@
     .gc-captured { filter: drop-shadow(0 0 5px var(--sub-range)) !important; }
     @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
     
-    /* 🔧 MOBILE DRAWER LAYOUT & FIXED HANDLE */
+    /* 🔧 MOBILE DRAWER LAYOUT */
     @media (max-width: 768px) {
       #app { flex-direction: column; }
       #map { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; z-index: 1; }
@@ -122,19 +140,7 @@
         transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
         display: flex; flex-direction: column;
         overflow: hidden; touch-action: none;
-        padding-top: 28px; /* Space for fixed handle */
       }
-      /* 🔧 Fixed Handle Always at Top of Screen */
-      .drag-handle {
-        position: fixed;
-        top: 8px; left: 50%; transform: translateX(-50%);
-        width: 36px; height: 4px; background: #cbd5e1; border-radius: 2px;
-        cursor: grab; z-index: 1001;
-        user-select: none; -webkit-user-select: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      }
-      .drag-handle:active { background: #94a3b8; cursor: grabbing; }
-      #sidebar.dragging { transition: none !important; touch-action: pan-y; }
       .modal-content { width: 96%; margin: 10px; max-height: 90vh; overflow-y: auto; }
     }
   </style>
@@ -155,8 +161,8 @@
         <button class="tab active" onclick="switchTab('messages')">💬 Messages</button>
         <button class="tab subs" onclick="switchTab('subscriptions')">📡 Subscriptions</button>
       </div>
-      <!-- 🔧 Unified Scroll Container -->
-      <div class="sheet-inner">
+      <!-- 🔧 Unified Scroll Area -->
+      <div class="scrollable-area">
         <div id="filters">
           <div class="filter-row" id="viewRangeRow" style="display:none;">
             <span>🎯 Range:</span>
@@ -176,7 +182,6 @@
             <span id="timeVal" style="min-width:60px;text-align:right;font-size:0.8rem;font-weight:500">30d</span>
           </div>
           <select id="categoryFilter"><option value="all">All Categories</option><option value="general">💬 General</option><option value="question">❓ Question</option><option value="event">🎉 Event</option><option value="warning">⚠️ Warning</option><option value="subscription">📡 Subscription</option></select>
-          <!-- 🔧 Apply Filters Button Removed -->
         </div>
         <div id="content"></div>
         <div id="sheet-footer">
@@ -210,14 +215,20 @@
       if(it.messages) it.messages.forEach(m => m.timestamp = toSec(m.timestamp));
     });
 
-    var realLocation = null, viewLocation = null, activeId = null, currentTab = 'messages';
+    var realLocation = null;
+    var viewLocation = { lat: 0, lng: 0 }; // 🔧 FIX: Default value prevents crash
+    var activeId = null, currentTab = 'messages';
     var postTarget = { lat: null, lng: null, itemId: null }, rangeEditorsOpen = {}, viewRadius = 5, viewMarker = null;
     var currentMaxKm = 10, currentItemMaxKm = 2, minKm = 0.01, minTimeH = 1, maxTimeH = 8760, viewTimeH = 720;
     var allTags = ['general', 'question', 'event', 'warning', 'new'];
 
     var fmtDist = function(km) { if(km >= 1000) return (km/1000).toFixed(2)+'k km'; if(km >= 1) return Math.round(km) + ' km'; return km.toFixed(2) + ' km'; };
     var fmtTime = function(h) { return h<2?'1h':h<24?Math.round(h)+'h':h<168?Math.round(h/24)+'d':h<8760?(h/730).toFixed(1)+'mo':'1yr'; };
-    var getDist = function(a, b) { var R=6371, toRad=Math.PI/180, dLat=(b.lat-a.lat)*toRad, dLon=(b.lng-a.lng)*toRad, aVal=Math.sin(dLat/2)**2+Math.cos(a.lat*toRad)*Math.cos(b.lat*toRad)*Math.sin(dLon/2)**2; return R*2*Math.atan2(Math.sqrt(aVal),Math.sqrt(1-aVal)); };
+    var getDist = function(a, b) { 
+      if(!a || !b) return 0; 
+      var R=6371, toRad=Math.PI/180, dLat=(b.lat-a.lat)*toRad, dLon=(b.lng-a.lng)*toRad, aVal=Math.sin(dLat/2)**2+Math.cos(a.lat*toRad)*Math.cos(b.lat*toRad)*Math.sin(dLon/2)**2; 
+      return R*2*Math.atan2(Math.sqrt(aVal),Math.sqrt(1-aVal)); 
+    };
     var findItem = function(id) { for(var i=0;i<items.length;i++) if(items[i].id===id) return items[i]; return null; };
     function kmToPercent(km, max) { if(km < minKm) km = minKm; return Math.min(100, Math.max(0, 100 * (Math.log(km / minKm) / Math.log(max / minKm)))); }
     function percentToKm(percent, max) { return minKm * Math.pow(max / minKm, percent / 100); }
@@ -258,7 +269,7 @@
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
       if(tab === 'messages') document.querySelector('.tab:first-child').classList.add('active');
       else document.querySelector('.tab.subs').classList.add('active');
-      document.getElementById('viewRangeRow').style.display = (tab === 'messages' && viewLocation) ? 'flex' : 'none';
+      document.getElementById('viewRangeRow').style.display = (tab === 'messages' && viewLocation.lat !== 0) ? 'flex' : 'none';
       applyFilters();
     };
 
@@ -272,7 +283,7 @@
     function getMaxItemKmFromZoom() { return Math.min(50, Math.max(0.05, 0.5 * Math.pow(2, 14 - map.getZoom()))); }
 
     function adaptSlidersToZoom() {
-      if(!viewLocation) return;
+      if(viewLocation.lat === 0) return;
       currentMaxKm = getMaxKmFromZoom(); currentItemMaxKm = getMaxItemKmFromZoom();
       document.getElementById('sliderMax').textContent = fmtDist(currentMaxKm);
       if(viewRadius > currentMaxKm) { viewRadius = currentMaxKm; radiusCircle.setRadius(viewRadius * 1000); }
@@ -318,7 +329,7 @@
     } else { document.getElementById('viewLocationInfo').innerHTML = '📍 Geo unsupported.'; }
 
     map.on('click', function(e) { 
-      if(!viewLocation) { initLocation(e.latlng.lat, e.latlng.lng, false); return; }
+      if(viewLocation.lat === 0) { initLocation(e.latlng.lat, e.latlng.lng, false); return; }
       setActive(null); viewLocation.lat = e.latlng.lat; viewLocation.lng = e.latlng.lng;
       postTarget = { lat: viewLocation.lat, lng: viewLocation.lng, itemId: null };
       viewMarker.setLatLng(viewLocation); radiusCircle.setLatLng(viewLocation); radiusCircle.setRadius(viewRadius * 1000);
@@ -383,7 +394,7 @@
       else t.textContent = '📝 Leave a Message'; m.classList.remove('hidden');
     };
 
-    // 🔧 LIVE FILTER LISTENERS
+    // 🔧 LIVE FILTERS
     document.getElementById('viewRadius').addEventListener('input', function(e) { viewRadius = percentToKm(parseFloat(e.target.value), currentMaxKm); document.getElementById('radiusVal').textContent = fmtDist(viewRadius); radiusCircle.setRadius(viewRadius * 1000); if(!document.getElementById('showAll').checked) applyFilters(); });
     document.getElementById('time').addEventListener('input', function(e) { viewTimeH = minTimeH * Math.pow(maxTimeH/minTimeH, e.target.value/100); applyFilters(); });
     document.getElementById('categoryFilter').addEventListener('change', applyFilters);
@@ -469,7 +480,7 @@
       renderMap(mapMsgs.concat(subs)); var li = currentTab==='subscriptions' ? subs : msgs; li.sort((a,b)=>a._dist-b._dist); renderList(li); radiusCircle.setRadius(sa?200000000:ur*1000); saveData();
     }
 
-    function updateUI() { var isR = realLocation && getDist(viewLocation, realLocation)<0.1; document.getElementById('viewLocationInfo').innerHTML = isR ? '📍 <span class="highlight">GPS</span>' : '👁️ <span class="highlight">'+(viewLocation?viewLocation.lat.toFixed(4)+', '+viewLocation.lng.toFixed(4):'Tap map')+'</span>'; document.getElementById('returnBtn').style.display = isR && viewLocation ? 'none' : (realLocation ? 'flex' : 'none'); }
+    function updateUI() { var isR = realLocation && getDist(viewLocation, realLocation)<0.1; document.getElementById('viewLocationInfo').innerHTML = isR ? '📍 <span class="highlight">GPS</span>' : '👁️ <span class="highlight">'+(viewLocation.lat !== 0 ? viewLocation.lat.toFixed(4)+', '+viewLocation.lng.toFixed(4):'Tap map')+'</span>'; document.getElementById('returnBtn').style.display = isR && viewLocation.lat !== 0 ? 'none' : (realLocation ? 'flex' : 'none'); }
     document.getElementById('returnBtn').onclick = () => { if(realLocation){ viewLocation={...realLocation}; viewMarker.setLatLng(viewLocation); radiusCircle.setLatLng(viewLocation); radiusCircle.setRadius(viewRadius*1000); refreshViewIcon(); updateUI(); applyFilters(); map.panTo(viewLocation,{animate:true}); }};
     document.getElementById('cancelBtn').onclick = () => document.getElementById('addModal').classList.add('hidden');
     document.getElementById('submitBtn').onclick = () => { var t=document.getElementById('msgText').value.trim(); if(!t)return alert('Enter text'); var c=document.getElementById('msgCategory').value; var nm={id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:postTarget.lat,lng:postTarget.lng,text:t,category:c,author:'User_'+Math.floor(Math.random()*9000+1000),timestamp:toSec(Date.now())}; if(postTarget.itemId){ var i=findItem(postTarget.itemId); if(i&&i.category!=='subscription'){i.messages.push(nm);i.title=i.messages[0].text.length>20?i.messages[0].text.substring(0,20)+'…':i.messages[0].text;}} else items.push({id:nm.id,lat:nm.lat,lng:nm.lng,range:c==='subscription'?viewRadius:0,isThread:false,category:c,title:t.length>20?t.substring(0,20)+'…':t,messages:c==='subscription'?[]:[nm], createdAt:nm.timestamp}); document.getElementById('addModal').classList.add('hidden');document.getElementById('msgText').value='';postTarget={lat:null,lng:null,itemId:null};saveData();applyFilters();};
@@ -477,7 +488,7 @@
     function saveData() { localStorage.setItem('gc_items', JSON.stringify(items)); }
     initTimeSlider(); function initTimeSlider(){ var r=viewTimeH/minTimeH, mr=maxTimeH/minTimeH; document.getElementById('time').value=Math.min(100,Math.max(0,100*(Math.log(r)/Math.log(mr)))); document.getElementById('timeVal').textContent=fmtTime(viewTimeH); }
 
-    // 🔧 MOBILE DRAG WITH FIXED HANDLE
+    // 🔧 MOBILE DRAG FIXED
     (function() {
       var sheet = document.getElementById('sidebar');
       var handle = document.getElementById('sheetHandle');
@@ -487,11 +498,9 @@
       function snap() {
         if (window.innerWidth > 768) { sheet.style.transform = 'none'; return; }
         var h = window.innerHeight;
-        // 🔧 Clamp to valid states
         if (startTranslate < h * 0.15) state = 'full';
         else if (startTranslate < h * 0.4) state = 'half';
         else state = 'peek';
-        // 🔧 Ensure we never go negative (off screen top)
         startTranslate = Math.max(0, state === 'full' ? 0 : state === 'half' ? h * 0.5 : h * 0.65);
         sheet.classList.remove('dragging');
         sheet.style.transform = `translateY(${startTranslate}px)`;
@@ -501,8 +510,8 @@
         if (!isDragging) return; 
         var diff = y - startY;
         startY = y;
-        // 🔧 Clamp drag so it doesn't fly off top
-        startTranslate = Math.max(0, startTranslate + diff);
+        // 🔧 Strict clamping prevents going off top
+        startTranslate = Math.max(0, Math.min(window.innerHeight * 0.9, startTranslate + diff));
         sheet.style.transform = `translateY(${startTranslate}px)`;
       }
       function onDragEnd() { if (isDragging) { isDragging = false; snap(); } }
