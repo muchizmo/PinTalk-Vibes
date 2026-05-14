@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v63 - Stable Drawer Engine</title>
+  <title>GeoChat v68 - Compact Filter Layout</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -18,14 +18,11 @@
     #map { flex: 1; height: 100%; z-index: 1; }
     #sidebar { width: 360px; background: var(--card); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; position: relative; }
     
-    /* 🔧 FIXED HANDLE: Always accessible at top */
     .drag-handle {
-      position: fixed;
-      top: 8px; left: 50%; transform: translateX(-50%);
+      position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
       width: 40px; height: 5px; background: #cbd5e1; border-radius: 3px;
-      cursor: grab; z-index: 1002;
-      user-select: none; -webkit-user-select: none;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      cursor: grab; z-index: 1002; user-select: none; -webkit-user-select: none;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
     }
     .drag-handle:active { background: #94a3b8; cursor: grabbing; }
 
@@ -50,24 +47,13 @@
     .slider-container { flex: 1; }
     input[type="range"] { width: 100%; cursor: pointer; }
     input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
-    .slider-labels { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--muted); margin-top: 2px; }
-    .toggle-all { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; }
+    .slider-labels { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--muted); margin-top: 2px; }    .toggle-all { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+    
     select, button { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); cursor: pointer; font-size: 0.85rem; }
     button:hover { background: #e5e7eb; }
     
-    /* 🔧 UNIFIED SCROLL AREA */
-    .scrollable-area {
-      flex: 1;
-      overflow-y: auto;
-      padding: 0;
-      -webkit-overflow-scrolling: touch;
-      overscroll-behavior: contain;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-    }
-    
-    #content { flex: 1; padding: 8px 12px; }
+    .scrollable-area { flex: 1; overflow-y: auto; padding: 0 0 max(24px, env(safe-area-inset-bottom)); -webkit-overflow-scrolling: touch; overscroll-behavior: contain; min-height: 0; display: flex; flex-direction: column; }
+    #content { flex: 1; padding: 8px 12px 40px; }
     #sheet-footer { padding: 12px; text-align: center; border-top: 1px solid var(--border); flex-shrink: 0; }
     .subtle-btn { background: transparent; border: none; color: var(--muted); font-size: 0.8rem; padding: 8px 16px; border-radius: 12px; cursor: pointer; transition: 0.2s; }
     .subtle-btn:hover { background: var(--accent); color: var(--text); }
@@ -110,8 +96,7 @@
     .msg-entry:last-child { margin-bottom: 0; }
     .msg-entry:hover { border-color: var(--bubble); }
 
-    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 20; backdrop-filter: blur(2px); }
-    .hidden { display: none !important; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 20; backdrop-filter: blur(2px); }    .hidden { display: none !important; }
     .modal-content { background: var(--card); padding: 16px; border-radius: 16px; width: 92%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
     .modal-title { font-size: 1rem; margin-bottom: 8px; }
     textarea { width: 100%; height: 80px; padding: 8px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; resize: none; font-family: inherit; font-size: 0.9rem; }
@@ -120,28 +105,22 @@
 
     .gc-view-marker { background: transparent !important; border: none !important; font-size: 28px; line-height: 1; width: 30px; height: 30px; text-align: center; cursor: move; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
     .gc-view-marker.pulse { animation: pulse 2s infinite; }
-    .gc-msg-icon { background: transparent !important; border: none !important; font-size: 24px; line-height: 1; width: 26px; height: 26px; text-align: center; cursor: pointer; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2)); transition: transform 0.2s; }
+    .gc-msg-icon { background: transparent !important; border: none !important; font-size: 24px; line-height: 1; width: 26px; height: 26px; text-align: center; cursor: grab; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2)); transition: transform 0.2s; }
+    .gc-msg-icon:active { cursor: grabbing; }
     .gc-msg-icon.active { transform: scale(1.3); filter: drop-shadow(0 0 6px var(--arc)); }
-    .gc-sub-icon { filter: drop-shadow(0 1px 3px rgba(6, 182, 212, 0.4)); cursor: move !important; }
+    .gc-sub-icon { filter: drop-shadow(0 1px 3px rgba(6, 182, 212, 0.4)); }
     .gc-captured { filter: drop-shadow(0 0 5px var(--sub-range)) !important; }
     @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
     
-    /* 🔧 MOBILE DRAWER LAYOUT */
     @media (max-width: 768px) {
       #app { flex-direction: column; }
-      #map { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; z-index: 1; }
+      #map { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
       #sidebar {
-        position: fixed; bottom: 0; left: 0; right: 0;
-        width: 100%; height: 100vh;
-        background: var(--card);
-        border-top-left-radius: 20px; border-top-right-radius: 20px;
-        box-shadow: 0 -4px 25px rgba(0,0,0,0.15);
-        z-index: 10;
-        transform: translateY(65vh);
-        transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-        display: flex; flex-direction: column;
-        overflow: hidden; 
-        touch-action: none;
+        position: fixed; bottom: 0; left: 0; right: 0; width: 100%; height: 100dvh; max-height: 100vh;
+        background: var(--card); border-top-left-radius: 20px; border-top-right-radius: 20px;
+        box-shadow: 0 -4px 25px rgba(0,0,0,0.15); z-index: 10;
+        transform: translateY(65vh); display: flex; flex-direction: column;
+        overflow: hidden; padding-bottom: env(safe-area-inset-bottom);
       }
       .modal-content { width: 96%; margin: 10px; max-height: 90vh; overflow-y: auto; }
     }
@@ -166,14 +145,12 @@
       <div class="scrollable-area">
         <div id="filters">
           <div class="filter-row" id="viewRangeRow" style="display:none;">
-            <span>🎯 Range:</span>
-            <div class="slider-container">
+            <span>🎯 Range:</span>            <div class="slider-container">
               <input type="range" id="viewRadius" min="0" max="100" step="0.1" value="50">
               <div class="slider-labels"><span>Micro</span><span id="sliderMax">10 km</span></div>
             </div>
             <span id="radiusVal" style="min-width:60px;text-align:right;font-size:0.8rem;font-weight:500">5.00 km</span>
           </div>
-          <label class="toggle-all"><input type="checkbox" id="showAll"> 🌍 Show All</label>
           <div class="filter-row">
             <span>⏱️ Time:</span>
             <div class="slider-container">
@@ -182,7 +159,20 @@
             </div>
             <span id="timeVal" style="min-width:60px;text-align:right;font-size:0.8rem;font-weight:500">30d</span>
           </div>
-          <select id="categoryFilter"><option value="all">All Categories</option><option value="general">💬 General</option><option value="question">❓ Question</option><option value="event">🎉 Event</option><option value="warning">⚠️ Warning</option><option value="subscription">📡 Subscription</option></select>
+          
+          <!-- 🔧 COMPACT FILTER ROW: Category + Show All -->
+          <div class="filter-row">
+            <select id="categoryFilter" style="flex: 1;">
+              <option value="all">All Categories</option>
+              <option value="general">💬 General</option>
+              <option value="question">❓ Question</option>
+              <option value="event">🎉 Event</option>
+              <option value="warning">⚠️ Warning</option>
+              <option value="subscription">📡 Subscription</option>
+            </select>
+            <label class="toggle-all"><input type="checkbox" id="showAll"> 🌍 Show All</label>
+          </div>
+
         </div>
         <div id="content"></div>
         <div id="sheet-footer">
@@ -204,8 +194,7 @@
         </select>
         <div class="modal-actions"><button id="cancelBtn">Cancel</button><button id="submitBtn" style="background:var(--primary);color:white;border:none">Post</button></div>
       </div>
-    </div>
-  </div>
+    </div>  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
@@ -254,8 +243,7 @@
             html += '<div class="sub-item '+(isOrig?'original':'')+'" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
               + (isOrig ? '<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">📍 Original</div>' : '')
               + '<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+m.text+'</div>';
-          }
-        }
+          }        }
       } else {
         var m = item.messages[0];
         html += '<div class="msg-entry" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
@@ -304,8 +292,7 @@
     }
     map.on('zoomend', adaptSlidersToZoom);
 
-    function initLocation(lat, lng, success) {
-      viewLocation = { lat, lng };
+    function initLocation(lat, lng, success) {      viewLocation = { lat, lng };
       if (success) realLocation = { lat, lng }; else realLocation = null;
       if (!viewMarker) {
         viewMarker = L.marker([lat, lng], { icon: L.divIcon({ className: 'gc-view-marker pulse', html: '...', iconSize: [30, 30], iconAnchor: [15, 15] }), draggable: true, zIndexOffset: 2000 }).addTo(map);
@@ -354,8 +341,7 @@
         currentTab = newTab;
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelector(newTab === 'messages' ? '.tab:first-child' : '.tab.subs').classList.add('active');
-        document.getElementById('viewRangeRow').style.display = newTab === 'messages' ? 'flex' : 'none';
-      }
+        document.getElementById('viewRangeRow').style.display = newTab === 'messages' ? 'flex' : 'none';      }
       selectedRangeCircle.setLatLng([target.lat, target.lng]);
       selectedRangeCircle.setRadius(target.range > 0 ? target.range * 1000 : 0);
       applyFilters();
@@ -370,16 +356,14 @@
     window.turnIntoBubble = function(id) { var i = findItem(id); if(i) { i.isThread = true; saveData(); applyFilters(); } };
     window.toggleRangeEditor = function(id) { rangeEditorsOpen[id] = !rangeEditorsOpen[id]; applyFilters(); };
     window.setRangeValue = function(id, val) {
-      var newKm = percentToKm(parseFloat(val), currentItemMaxKm); var item = findItem(id); if(item) {
-        item.range = Math.round(newKm * 100) / 100; saveData();
-        var slider = document.getElementById('range-slider-' + id); if(slider) slider.value = parseFloat(val);
+      var pct = parseFloat(val); if(isNaN(pct) || pct < 0) pct = 0;
+      var item = findItem(id); if(item) {
+        var newKm = percentToKm(pct, currentItemMaxKm); item.range = Math.round(newKm * 100) / 100; saveData();
+        var slider = document.getElementById('range-slider-' + id); if(slider) slider.value = pct;
         var num = document.getElementById('range-num-' + id); if(num) num.value = item.range.toFixed(2);
         var lbl = document.getElementById('range-label-' + id); if(lbl) lbl.textContent = item.range.toFixed(2) + ' km';
+        markersLayer.eachLayer(function(layer) { if(layer instanceof L.Circle && layer.options.itemId === id) layer.setRadius(item.range * 1000); });
       }
-    };
-    window.setRangeValueFromNum = function(id, val) {
-      var num = parseFloat(val); if(isNaN(num)) return; if(num > currentItemMaxKm) num = currentItemMaxKm; if(num < 0) num = 0;
-      var item = findItem(id); if(item) { item.range = num; saveData(); var slider = document.getElementById('range-slider-' + id); if(slider) slider.value = kmToPercent(num, currentItemMaxKm); var lbl = document.getElementById('range-label-' + id); if(lbl) lbl.textContent = num.toFixed(2) + ' km'; }
     };
     window.applyRangeChange = function(id) { applyFilters(); };
     window.subscribeToBubble = function(id) {
@@ -395,7 +379,6 @@
       else t.textContent = '📝 Leave a Message'; m.classList.remove('hidden');
     };
 
-    // 🔧 LIVE FILTERS
     document.getElementById('viewRadius').addEventListener('input', function(e) { viewRadius = percentToKm(parseFloat(e.target.value), currentMaxKm); document.getElementById('radiusVal').textContent = fmtDist(viewRadius); radiusCircle.setRadius(viewRadius * 1000); if(!document.getElementById('showAll').checked) applyFilters(); });
     document.getElementById('time').addEventListener('input', function(e) { viewTimeH = minTimeH * Math.pow(maxTimeH/minTimeH, e.target.value/100); applyFilters(); });
     document.getElementById('categoryFilter').addEventListener('change', applyFilters);
@@ -405,19 +388,58 @@
     });
 
     function renderMap(all) {
-      markersLayer.clearLayers(); var ico = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',subscription:'📡'}; var col = '#f87171';
-      all.forEach(item => { if(item.category === 'subscription' && item.range > 0 && (!item.isFromBubble || item.id === activeId)) L.circle([item.lat,item.lng],{radius:item.range*1000,color:col,fillColor:col,fillOpacity:0.12,weight:2,dashArray:'5,5'}).addTo(markersLayer); });
+      markersLayer.clearLayers();
+      var ico = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',subscription:'📡'};
+      var col = '#f87171';
+      // Draw circles
       all.forEach(item => {
-        if(!item.lat||!item.lng||item.isFromBubble) return;
-        var s = item.category==='subscription', act = item.id===activeId, cap = item._isCaptured;
-        var h = ico[item.category]||'📍', c = 'gc-msg-icon'+(s?' gc-sub-icon':'')+(act?' active':'')+(cap?' gc-captured':'');
-        var pop = s?'<b>'+item.title+'</b><br>📏 Range: '+item.range.toFixed(2)+'km' : (item.isThread?'<b>'+item.title+'</b><br>🎈 '+item.messages.length+' msgs<br>📏 Range: '+item.range.toFixed(2)+'km' : '<b>'+item.author+'</b><br>'+item.messages[0].text);
-        var m = L.marker([item.lat,item.lng],{icon:L.divIcon({className:c,html:h,iconSize:[26,26],iconAnchor:[13,13]}),draggable:s&&!item.isFromBubble}).bindPopup(pop).addTo(markersLayer);
-        m.on('dragend', e => { var p=e.target.getLatLng(), o=findItem(item.id); if(o){o.lat=p.lat;o.lng=p.lng;} saveData(); applyFilters(); });
-        m.on('click', e => { L.DomEvent.stopPropagation(e); setActive(item.id); });
+        if(item.category === 'subscription' && item.range > 0 && (!item.isFromBubble || item.id === activeId))
+          L.circle([item.lat,item.lng], { radius: item.range*1000, color: col, fillColor: col, fillOpacity: 0.12, weight: 2, dashArray: '5,5', itemId: item.id }).addTo(markersLayer);
+      });
+
+      // 🔧 DRAW DRAGGABLE MARKERS
+      all.forEach(item => {
+        if(!item.lat || !item.lng || item.isFromBubble) return;
+        var s = item.category === 'subscription', act = item.id === activeId, cap = item._isCaptured;
+        var h = ico[item.category] || '📍';
+        var c = 'gc-msg-icon' + (s ? ' gc-sub-icon' : '') + (act ? ' active' : '') + (cap ? ' gc-captured' : '');
+        var pop = s ? '<b>'+item.title+'</b><br>📏 Range: '+item.range.toFixed(2)+'km' : (item.isThread ? '<b>'+item.title+'</b><br>🎈 '+item.messages.length+' msgs<br>📏 Range: '+item.range.toFixed(2)+'km' : '<b>'+item.author+'</b><br>'+item.messages[0].text);
+
+        var m = L.marker([item.lat, item.lng], {
+          icon: L.divIcon({className:c, html:h, iconSize:[26,26], iconAnchor:[13,13]}),
+          draggable: true // 🔧 ALL MARKERS ARE NOW DRAGGABLE
+        }).bindPopup(pop).addTo(markersLayer);
+
+        // 🔧 REAL-TIME CIRCLE FOLLOWING DURING DRAG
+        m.on('drag', function(e) {
+          if(item.category === 'subscription' && item.range > 0) {
+            var newPos = e.target.getLatLng();
+            markersLayer.eachLayer(function(layer) {
+              if(layer instanceof L.Circle && layer.options.itemId === item.id) {
+                layer.setLatLng(newPos);
+              }
+            });
+          }
+        });
+
+        // 🔧 SAVE & RECALCULATE ON DROP
+        m.on('dragend', function(e) {
+          var pos = e.target.getLatLng();
+          var obj = findItem(item.id);
+          if(obj) {
+            obj.lat = pos.lat;
+            obj.lng = pos.lng;
+            saveData();
+            applyFilters();
+          }
+        });
+
+        m.on('click', function(e) {
+          L.DomEvent.stopPropagation(e);
+          setActive(item.id);
+        });
       });
     }
-
     function renderList(all) {
       var el = document.getElementById('content'); el.innerHTML = '';
       if(!all.length) { el.innerHTML = '<p class="empty">'+(currentTab==='subscriptions'?'No subscription bubbles.':'No messages in current range.')+'</p>'; return; }
@@ -437,7 +459,13 @@
             h += '<div style="margin-top:4px;padding:4px 6px;background:#f9fafb;border-radius:6px;font-size:0.7rem;"><div style="margin-bottom:2px;font-weight:500;color:var(--muted);">🎛️ Filters:</div><div style="display:flex;gap:6px;flex-wrap:wrap;">';
             allTags.forEach(t => { var chk = tags.includes(t) ? 'checked' : ''; h += '<label style="cursor:pointer;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--card);"><input type="checkbox" '+chk+' onclick="event.stopPropagation();window.toggleSubTag(\''+item.id+'\',\''+t+'\')"> '+tagIcons[t]+t.charAt(0).toUpperCase() + t.slice(1)+'</label>'; });
             h += '</div></div>';
-            if(rangeEditorsOpen[item.id] && !item.isFromBubble) { var pct = kmToPercent(item.range, currentItemMaxKm); h += '<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group"><input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)"><input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValueFromNum(\''+item.id+'\',this.value);applyRangeChange(\''+item.id+'\')"></div></div>'; }
+            if(rangeEditorsOpen[item.id] && !item.isFromBubble) { 
+              var pct = kmToPercent(item.range, currentItemMaxKm); 
+              h += '<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group">'
+                + '<input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)">'
+                + '<input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\',kmToPercent(this.value,currentItemMaxKm));applyRangeChange(\''+item.id+'\')">'
+                + '</div></div>'; 
+            }
           } else h += '<div style="font-size:0.7rem;color:var(--muted);margin:4px 0">'+(item.isFromBubble?'📥 Locked':'📥 '+item.capturedCount+' msgs')+'</div>';
           if(item.isFromBubble && item._bubbleContent) { h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">'+getBubbleInnerHTML(item._bubbleContent, false)+'</div>'; }
           else if(item.capturedGroups) { h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px;">'; item.capturedGroups.forEach((g,gi) => { h += getBubbleInnerHTML({id:g.sourceId, category:g.messages[0]?.category||'general', isThread:g.messages.length>1, title:g.sourceTitle, messages:g.messages, _dist:g.distance}, g.messages[0]?g.messages[0].isNew:false); if(gi < item.capturedGroups.length-1) h+='<div style="height:1px;background:var(--border);margin:2px 0;"></div>'; }); h+='</div>'; }
@@ -445,7 +473,7 @@
         } else {
           if(item.isThread) {
             h += '<p class="msg-text" style="font-weight:500">'+item.title+'</p><button class="action-btn" style="margin-top:4px;margin-right:4px;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>';
-            if(item.id===activeId) { h += '<div style="display:flex;gap:4px;margin:4px 0;"><button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️</button><button class="action-btn" onclick="event.stopPropagation();openModal(\''+item.id+'\')">➕</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">💬 '+item.messages.length+'</span></div>'; if(rangeEditorsOpen[item.id]) { var pct = kmToPercent(item.range, currentItemMaxKm); h+='<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group"><input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)"><input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValueFromNum(\''+item.id+'\',this.value);applyRangeChange(\''+item.id+'\')"></div></div>'; } } else h += '<div style="font-size:0.7rem;color:var(--muted);margin:4px 0">💬 '+item.messages.length+' msgs</div>';
+            if(item.id===activeId) { h += '<div style="display:flex;gap:4px;margin:4px 0;"><button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️</button><button class="action-btn" onclick="event.stopPropagation();openModal(\''+item.id+'\')">➕</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">💬 '+item.messages.length+'</span></div>'; if(rangeEditorsOpen[item.id]) { var pct = kmToPercent(item.range, currentItemMaxKm); h+='<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group"><input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)"><input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\',kmToPercent(this.value,currentItemMaxKm));applyRangeChange(\''+item.id+'\')"></div></div>'; } } else h += '<div style="font-size:0.7rem;color:var(--muted);margin:4px 0">💬 '+item.messages.length+' msgs</div>';
             if(item.messages) item.messages.forEach((m,j)=>{ h+='<div class="sub-item'+(j===0?' original':'')+'" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')">'+(j===0?'<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">📍 Original</div>':'')+'<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+m.text+'</div>'; });
           } else { var m = item.messages[0]; h+='<div class="msg-entry" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')"><p class="msg-text" style="margin-bottom:2px">'+m.text+'</p><div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div></div><button class="action-btn" style="margin-top:4px;" onclick="event.stopPropagation();turnIntoBubble(\''+item.id+'\')">🎈 Bubble</button>'; }
         }
@@ -460,8 +488,7 @@
       var now = toSec(Date.now()), cut = now - (viewTimeH * 3600);
       var capIds = new Set(), subs = [], msgs = [], mapMsgs = [];
 
-      items.forEach(it => { 
-        if(it.category!=='subscription') return; 
+      items.forEach(it => {         if(it.category!=='subscription') return; 
         if(!it.viewLog) it.viewLog = {}; if(!it.allowedTags) it.allowedTags = allTags.slice(); if(!it.createdAt) it.createdAt = toSec(Date.now());
         var d=getDist(viewLocation,it); 
         if(it.isFromBubble && it.sourceBubbleId){ var sb=findItem(it.sourceBubbleId); if(sb)it._bubbleContent=sb; } 
@@ -489,107 +516,26 @@
     function saveData() { localStorage.setItem('gc_items', JSON.stringify(items)); }
     initTimeSlider(); function initTimeSlider(){ var r=viewTimeH/minTimeH, mr=maxTimeH/minTimeH; document.getElementById('time').value=Math.min(100,Math.max(0,100*(Math.log(r)/Math.log(mr)))); document.getElementById('timeVal').textContent=fmtTime(viewTimeH); }
 
-    // 🔧 STABLE MOBILE DRAG ENGINE
+    // 🔧 FREE DRAG ENGINE
     (function() {
       var sheet = document.getElementById('sidebar');
       var handle = document.getElementById('sheetHandle');
-      
-      // State variables
-      var startTranslate = window.innerHeight * 0.65; // Initial position
-      var dragStartY = 0;
-      var dragStartTranslate = 0;
-      var isDragging = false;
-
-      function updateTransform() { 
-        sheet.style.transform = `translateY(${startTranslate}px)`; 
-      }
-      
-      function snap() {
-        if (window.innerWidth > 768) { sheet.style.transform = 'none'; return; }
-        var h = window.innerHeight;
-        
-        // 🔧 Snap Logic: 
-        // Full: < 15% of screen height
-        // Half: < 40% of screen height
-        // Peek: Otherwise
-        if (startTranslate < h * 0.15) startTranslate = 0;
-        else if (startTranslate < h * 0.4) startTranslate = h * 0.5;
-        else startTranslate = h * 0.65;
-        
-        sheet.classList.remove('dragging');
-        updateTransform();
-      }
-
-      function onDragStart(y) { 
-        if (window.innerWidth > 768) return; 
-        dragStartY = y; 
-        dragStartTranslate = startTranslate;
-        isDragging = true; 
-        sheet.classList.add('dragging'); 
-      }
-
+      var isDragging = false, startY = 0, currentTranslate = window.innerHeight * 0.65;
+      sheet.style.transform = `translateY(${currentTranslate}px)`;
+      function onDragStart(y) { isDragging = true; startY = y; sheet.style.transition = 'none'; }
       function onDragMove(y, e) { 
-        if (!isDragging) return; 
-        if(e) e.preventDefault(); // 🔧 Prevent browser bounce/scroll
-        
-        // 🔧 Delta calculation: Absolute position based on start
-        var diff = y - dragStartY;
-        var nextVal = dragStartTranslate + diff;
-        
-        // 🔧 HARD LOCK: Clamp between 0 and 90% height
-        if (nextVal < 0) nextVal = 0;
-        if (nextVal > window.innerHeight * 0.9) nextVal = window.innerHeight * 0.9;
-        
-        startTranslate = nextVal;
-        sheet.style.transform = `translateY(${startTranslate}px)`;
+        if (!isDragging) return; if(e) e.preventDefault(); 
+        var delta = y - startY; currentTranslate += delta; startY = y;
+        var maxT = window.innerHeight * 0.9;
+        if (currentTranslate < 0) currentTranslate = 0; if (currentTranslate > maxT) currentTranslate = maxT;
+        sheet.style.transform = `translateY(${currentTranslate}px)`;
       }
-
-      function onDragEnd() { 
-        if (isDragging) { 
-          isDragging = false; 
-          snap(); 
-        } 
-      }
-
-      // Attach listeners
+      function onDragEnd() { isDragging = false; sheet.style.transition = 'transform 0.2s ease-out'; }
       handle.addEventListener('touchstart', e => onDragStart(e.touches[0].clientY), {passive: true});
       handle.addEventListener('mousedown', e => onDragStart(e.clientY));
       window.addEventListener('touchmove', e => onDragMove(e.touches[0].clientY, e), {passive: false});
       window.addEventListener('mousemove', e => onDragMove(e.clientY, e));
-      window.addEventListener('touchend', onDragEnd);
-      window.addEventListener('mouseup', onDragEnd);
-      
-      // Tap handle to cycle states
-      handle.addEventListener('click', e => { 
-        if(isDragging) return; 
-        var h = window.innerHeight;
-        // Cycle: Peek -> Half -> Full -> Peek
-        // We determine current state by position, then move to next
-        if (startTranslate > h * 0.6) {
-          // Currently Peek, go to Half
-          startTranslate = h * 0.5;
-        } else if (startTranslate > h * 0.2) {
-          // Currently Half, go to Full
-          startTranslate = 0;
-        } else {
-          // Currently Full, go to Peek
-          startTranslate = h * 0.65;
-        }
-        updateTransform();
-      });
-
-      // Init
-      updateTransform();
-      window.addEventListener('resize', () => { 
-        // Recalculate position on resize to keep it valid
-        var h = window.innerHeight;
-        // If it was full, keep full. If peek, keep peek relative ratio.
-        // Simplest is to reset to Peek if undefined, or clamp.
-        if (startTranslate === 0) startTranslate = 0;
-        else startTranslate = Math.max(0, Math.min(h, startTranslate)); 
-        updateTransform(); 
-      });
+      window.addEventListener('touchend', onDragEnd); window.addEventListener('mouseup', onDragEnd);
     })();
-  </script>
-</body>
+  </script></body>
 </html>
