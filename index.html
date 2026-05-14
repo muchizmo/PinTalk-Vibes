@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v68 - Compact Filter Layout</title>
+  <title>GeoChat v69 - Edit & Delete Markers</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -47,7 +47,8 @@
     .slider-container { flex: 1; }
     input[type="range"] { width: 100%; cursor: pointer; }
     input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
-    .slider-labels { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--muted); margin-top: 2px; }    .toggle-all { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+    .slider-labels { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--muted); margin-top: 2px; }
+    .toggle-all { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
     
     select, button { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); cursor: pointer; font-size: 0.85rem; }
     button:hover { background: #e5e7eb; }
@@ -96,7 +97,8 @@
     .msg-entry:last-child { margin-bottom: 0; }
     .msg-entry:hover { border-color: var(--bubble); }
 
-    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 20; backdrop-filter: blur(2px); }    .hidden { display: none !important; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 20; backdrop-filter: blur(2px); }
+    .hidden { display: none !important; }
     .modal-content { background: var(--card); padding: 16px; border-radius: 16px; width: 92%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
     .modal-title { font-size: 1rem; margin-bottom: 8px; }
     textarea { width: 100%; height: 80px; padding: 8px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; resize: none; font-family: inherit; font-size: 0.9rem; }
@@ -145,7 +147,8 @@
       <div class="scrollable-area">
         <div id="filters">
           <div class="filter-row" id="viewRangeRow" style="display:none;">
-            <span>🎯 Range:</span>            <div class="slider-container">
+            <span>🎯 Range:</span>
+            <div class="slider-container">
               <input type="range" id="viewRadius" min="0" max="100" step="0.1" value="50">
               <div class="slider-labels"><span>Micro</span><span id="sliderMax">10 km</span></div>
             </div>
@@ -160,7 +163,6 @@
             <span id="timeVal" style="min-width:60px;text-align:right;font-size:0.8rem;font-weight:500">30d</span>
           </div>
           
-          <!-- 🔧 COMPACT FILTER ROW: Category + Show All -->
           <div class="filter-row">
             <select id="categoryFilter" style="flex: 1;">
               <option value="all">All Categories</option>
@@ -194,7 +196,8 @@
         </select>
         <div class="modal-actions"><button id="cancelBtn">Cancel</button><button id="submitBtn" style="background:var(--primary);color:white;border:none">Post</button></div>
       </div>
-    </div>  </div>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
@@ -229,6 +232,30 @@
       saveData(); applyFilters();
     };
 
+    // 🔧 NEW: Edit & Delete Functions
+    window.editItem = function(id) {
+      var item = findItem(id); if(!item) return;
+      var newTitle = prompt("Edit bubble title:", item.title);
+      if(newTitle !== null) {
+        item.title = newTitle.trim();
+        if(item.messages.length > 0) {
+          var newText = prompt("Edit original message:", item.messages[0].text);
+          if(newText !== null) item.messages[0].text = newText.trim();
+        }
+        saveData(); applyFilters();
+      }
+    };
+    window.deleteItem = function(id) {
+      if(!confirm("Delete this marker and its messages?")) return;
+      var idx = items.findIndex(x => x.id === id);
+      if(idx > -1) { 
+        items.splice(idx, 1); 
+        delete rangeEditorsOpen[id]; 
+        if(activeId === id) activeId = null; 
+        saveData(); applyFilters(); 
+      }
+    };
+
     function getBubbleInnerHTML(item, isNew) {
       var html = '', dist = item._dist !== undefined ? fmtDist(item._dist) : fmtDist(getDist(viewLocation, item));
       var catMap = { general: '💬 General', question: '❓ Question', event: '🎉 Event', warning: '⚠️ Warning' };
@@ -243,7 +270,8 @@
             html += '<div class="sub-item '+(isOrig?'original':'')+'" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
               + (isOrig ? '<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">📍 Original</div>' : '')
               + '<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+m.text+'</div>';
-          }        }
+          }
+        }
       } else {
         var m = item.messages[0];
         html += '<div class="msg-entry" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
@@ -292,7 +320,8 @@
     }
     map.on('zoomend', adaptSlidersToZoom);
 
-    function initLocation(lat, lng, success) {      viewLocation = { lat, lng };
+    function initLocation(lat, lng, success) {
+      viewLocation = { lat, lng };
       if (success) realLocation = { lat, lng }; else realLocation = null;
       if (!viewMarker) {
         viewMarker = L.marker([lat, lng], { icon: L.divIcon({ className: 'gc-view-marker pulse', html: '...', iconSize: [30, 30], iconAnchor: [15, 15] }), draggable: true, zIndexOffset: 2000 }).addTo(map);
@@ -341,7 +370,8 @@
         currentTab = newTab;
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelector(newTab === 'messages' ? '.tab:first-child' : '.tab.subs').classList.add('active');
-        document.getElementById('viewRangeRow').style.display = newTab === 'messages' ? 'flex' : 'none';      }
+        document.getElementById('viewRangeRow').style.display = newTab === 'messages' ? 'flex' : 'none';
+      }
       selectedRangeCircle.setLatLng([target.lat, target.lng]);
       selectedRangeCircle.setRadius(target.range > 0 ? target.range * 1000 : 0);
       applyFilters();
@@ -391,6 +421,7 @@
       markersLayer.clearLayers();
       var ico = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',subscription:'📡'};
       var col = '#f87171';
+
       // Draw circles
       all.forEach(item => {
         if(item.category === 'subscription' && item.range > 0 && (!item.isFromBubble || item.id === activeId))
@@ -407,10 +438,9 @@
 
         var m = L.marker([item.lat, item.lng], {
           icon: L.divIcon({className:c, html:h, iconSize:[26,26], iconAnchor:[13,13]}),
-          draggable: true // 🔧 ALL MARKERS ARE NOW DRAGGABLE
+          draggable: true
         }).bindPopup(pop).addTo(markersLayer);
 
-        // 🔧 REAL-TIME CIRCLE FOLLOWING DURING DRAG
         m.on('drag', function(e) {
           if(item.category === 'subscription' && item.range > 0) {
             var newPos = e.target.getLatLng();
@@ -422,7 +452,6 @@
           }
         });
 
-        // 🔧 SAVE & RECALCULATE ON DROP
         m.on('dragend', function(e) {
           var pos = e.target.getLatLng();
           var obj = findItem(item.id);
@@ -440,6 +469,7 @@
         });
       });
     }
+
     function renderList(all) {
       var el = document.getElementById('content'); el.innerHTML = '';
       if(!all.length) { el.innerHTML = '<p class="empty">'+(currentTab==='subscriptions'?'No subscription bubbles.':'No messages in current range.')+'</p>'; return; }
@@ -472,10 +502,38 @@
           else if(item.id===activeId && !item.isFromBubble) h += '<div style="padding:8px;text-align:center;color:var(--muted);font-size:0.8rem">No messages.</div>';
         } else {
           if(item.isThread) {
-            h += '<p class="msg-text" style="font-weight:500">'+item.title+'</p><button class="action-btn" style="margin-top:4px;margin-right:4px;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>';
-            if(item.id===activeId) { h += '<div style="display:flex;gap:4px;margin:4px 0;"><button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️</button><button class="action-btn" onclick="event.stopPropagation();openModal(\''+item.id+'\')">➕</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">💬 '+item.messages.length+'</span></div>'; if(rangeEditorsOpen[item.id]) { var pct = kmToPercent(item.range, currentItemMaxKm); h+='<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group"><input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)"><input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\',kmToPercent(this.value,currentItemMaxKm));applyRangeChange(\''+item.id+'\')"></div></div>'; } } else h += '<div style="font-size:0.7rem;color:var(--muted);margin:4px 0">💬 '+item.messages.length+' msgs</div>';
+            h += '<p class="msg-text" style="font-weight:500">'+item.title+'</p>';
+            h += '<button class="action-btn" style="margin-top:4px;margin-right:4px;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>';
+            if(item.id===activeId) { 
+              h += '<div style="display:flex;gap:4px;margin:6px 0;flex-wrap:wrap;">'
+                + '<button class="action-btn" onclick="event.stopPropagation();editItem(\''+item.id+'\')">✏️ Edit</button>'
+                + '<button class="action-btn danger" onclick="event.stopPropagation();deleteItem(\''+item.id+'\')">🗑️ Delete</button>'
+                + '<button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️ Range</button>'
+                + '<button class="action-btn" onclick="event.stopPropagation();openModal(\''+item.id+'\')">➕ Add</button>'
+                + '<span style="font-size:0.7rem;color:var(--muted);align-self:center">💬 '+item.messages.length+'</span></div>';
+              if(rangeEditorsOpen[item.id]) { 
+                var pct = kmToPercent(item.range, currentItemMaxKm); 
+                h+='<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group">'
+                  + '<input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)">'
+                  + '<input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\',kmToPercent(this.value,currentItemMaxKm));applyRangeChange(\''+item.id+'\')">'
+                  + '</div></div>'; 
+              }
+            } else {
+              h += '<div style="font-size:0.7rem;color:var(--muted);margin:4px 0">💬 '+item.messages.length+' msgs</div>';
+            }
             if(item.messages) item.messages.forEach((m,j)=>{ h+='<div class="sub-item'+(j===0?' original':'')+'" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')">'+(j===0?'<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">📍 Original</div>':'')+'<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+m.text+'</div>'; });
-          } else { var m = item.messages[0]; h+='<div class="msg-entry" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')"><p class="msg-text" style="margin-bottom:2px">'+m.text+'</p><div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div></div><button class="action-btn" style="margin-top:4px;" onclick="event.stopPropagation();turnIntoBubble(\''+item.id+'\')">🎈 Bubble</button>'; }
+          } else { 
+            var m = item.messages[0]; 
+            h+='<div class="msg-entry" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')"><p class="msg-text" style="margin-bottom:2px">'+m.text+'</p><div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div></div>';
+            if(item.id === activeId) {
+              h += '<div style="display:flex;gap:4px;margin:6px 0;">'
+                + '<button class="action-btn" onclick="event.stopPropagation();editItem(\''+item.id+'\')">✏️ Edit</button>'
+                + '<button class="action-btn danger" onclick="event.stopPropagation();deleteItem(\''+item.id+'\')">🗑️ Delete</button>'
+                + '<button class="action-btn" style="margin-left:auto;" onclick="event.stopPropagation();turnIntoBubble(\''+item.id+'\')">🎈 Bubble</button></div>';
+            } else {
+              h += '<button class="action-btn" style="margin-top:4px;" onclick="event.stopPropagation();turnIntoBubble(\''+item.id+'\')">🎈 Bubble</button>'; 
+            }
+          }
         }
         card.innerHTML = h; card.onclick = e => { if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.closest('.range-editor')||e.target.closest('.sub-item')||e.target.closest('.msg-entry')) return; setActive(item.id); }; el.appendChild(card);
       });
@@ -488,7 +546,8 @@
       var now = toSec(Date.now()), cut = now - (viewTimeH * 3600);
       var capIds = new Set(), subs = [], msgs = [], mapMsgs = [];
 
-      items.forEach(it => {         if(it.category!=='subscription') return; 
+      items.forEach(it => { 
+        if(it.category!=='subscription') return; 
         if(!it.viewLog) it.viewLog = {}; if(!it.allowedTags) it.allowedTags = allTags.slice(); if(!it.createdAt) it.createdAt = toSec(Date.now());
         var d=getDist(viewLocation,it); 
         if(it.isFromBubble && it.sourceBubbleId){ var sb=findItem(it.sourceBubbleId); if(sb)it._bubbleContent=sb; } 
@@ -537,5 +596,6 @@
       window.addEventListener('mousemove', e => onDragMove(e.clientY, e));
       window.addEventListener('touchend', onDragEnd); window.addEventListener('mouseup', onDragEnd);
     })();
-  </script></body>
+  </script>
+</body>
 </html>
