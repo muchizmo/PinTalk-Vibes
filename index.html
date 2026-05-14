@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v56 - Mobile-Optimized Layout</title>
+  <title>GeoChat v58 - Mobile Drawer & Compact UI</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -13,17 +13,19 @@
       --sub-range: #f87171; --sub-range-bg: #fef2f2;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-    body { background: var(--bg); color: var(--text); height: 100dvh; height: 100vh; overflow: hidden; }
-    #app { display: flex; height: 100dvh; height: 100vh; position: relative; }
+    body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+    #app { display: flex; height: 100vh; position: relative; }
     #map { flex: 1; height: 100%; z-index: 1; }
     #sidebar { width: 360px; background: var(--card); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
     
-    .sidebar-header { padding: 12px; border-bottom: 1px solid var(--border); background: var(--accent); flex-shrink: 0; }
-    .sidebar-header h2 { font-size: 1.2rem; margin-bottom: 4px; }
-    .view-info { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; min-height: 18px; }
+    /* 🔧 COMPACT HEADER */
+    .sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--accent); gap: 8px; flex-shrink: 0; }
+    .header-left { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+    .sidebar-header h2 { font-size: 1rem; margin: 0; white-space: nowrap; }
+    .view-info { font-size: 0.75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .view-info .highlight { color: var(--primary); font-weight: 500; }
-    #returnBtn { width: 100%; background: var(--warning); color: white; border: none; padding: 6px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; display: none; }
-    #returnBtn:hover { background: #d97706; }
+    #returnBtn { width: 32px; height: 32px; padding: 0; font-size: 1rem; background: var(--card); border: 1px solid var(--border); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; }
+    #returnBtn:hover { background: var(--accent); transform: scale(1.05); }
     
     .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg); flex-shrink: 0; }
     .tab { flex: 1; padding: 10px; border: none; background: transparent; cursor: pointer; font-size: 0.85rem; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.2s; }
@@ -32,23 +34,26 @@
     .tab.subs { color: var(--sub); }
     .tab.subs.active { border-bottom-color: var(--sub); }
     
-    #filters { padding: 12px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--border); }
-    .filter-row { display: flex; align-items: center; gap: 10px; }
-    .filter-row span { font-size: 0.85rem; font-weight: 500; min-width: 50px; text-align: right; }
+    #filters { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .filter-row { display: flex; align-items: center; gap: 8px; }
+    .filter-row span { font-size: 0.8rem; font-weight: 500; min-width: 40px; text-align: right; }
     .slider-container { flex: 1; }
     input[type="range"] { width: 100%; cursor: pointer; }
     input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
-    .slider-labels { display: flex; justify-content: space-between; font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
-    .toggle-all { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; }
-    select, button { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); cursor: pointer; font-size: 0.9rem; }
+    .slider-labels { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--muted); margin-top: 2px; }
+    .toggle-all { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; }
+    select, button { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); cursor: pointer; font-size: 0.85rem; }
     button:hover { background: #e5e7eb; }
     #refreshBtn { background: var(--primary); color: white; border: none; font-weight: 500; }
     #refreshBtn:hover { background: var(--primary-hover); }
-    #demoBtn { background: #6b7280; color: white; border: none; font-size: 0.8rem; margin-top: 5px; }
 
+    .sheet-inner { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
     #content { flex: 1; overflow-y: auto; padding: 8px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+    #sheet-footer { padding: 12px; text-align: center; border-top: 1px solid var(--border); flex-shrink: 0; }
+    .subtle-btn { background: transparent; border: none; color: var(--muted); font-size: 0.8rem; padding: 4px 8px; border-radius: 12px; cursor: pointer; transition: 0.2s; }
+    .subtle-btn:hover { background: var(--accent); color: var(--text); }
+
     .empty { text-align: center; color: var(--muted); margin-top: 30px; font-size: 0.9rem; }
-    
     .card { background: var(--card); border: 2px solid var(--border); border-radius: 10px; padding: 10px; margin: 6px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: all 0.2s; }
     .card:hover { border-color: var(--primary); box-shadow: 0 3px 8px rgba(37, 99, 235, 0.15); }
     .card.active { border-color: var(--arc); background: #f5f3ff; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2); }
@@ -63,24 +68,24 @@
     .category-badge.warning { background: #f59e0b; }
     .category-badge.subscription { background: var(--sub); }
     .category-badge.new { background: #fbbf24; color: #451a03; }
-    .distance { font-size: 0.75rem; color: var(--muted); font-weight: 500; }
-    .msg-text { font-size: 0.9rem; line-height: 1.4; margin-bottom: 6px; }
-    .meta { font-size: 0.7rem; color: var(--muted); }
+    .distance { font-size: 0.7rem; color: var(--muted); font-weight: 500; }
+    .msg-text { font-size: 0.85rem; line-height: 1.4; margin-bottom: 6px; }
+    .meta { font-size: 0.65rem; color: var(--muted); }
     
-    .action-btn { padding: 4px 8px; background: var(--accent); border: 1px solid var(--border); border-radius: 6px; font-size: 0.75rem; cursor: pointer; display: inline-block; }
+    .action-btn { padding: 4px 8px; background: var(--accent); border: 1px solid var(--border); border-radius: 6px; font-size: 0.7rem; cursor: pointer; display: inline-block; }
     .action-btn:hover { background: var(--bubble); color: white; border-color: var(--bubble); }
     .action-btn.danger:hover { background: var(--sub-range); border-color: var(--sub-range); color: white; }
     
     .range-editor { display: none; margin: 6px 0; padding: 8px; background: var(--sub-range-bg); border: 1px solid #fca5a5; border-radius: 8px; }
     .range-editor.open { display: block; }
-    .range-editor label { font-size: 0.8rem; color: #991b1b; display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .range-editor label { font-size: 0.75rem; color: #991b1b; display: flex; justify-content: space-between; margin-bottom: 4px; }
     .range-input-group { display: flex; gap: 8px; align-items: center; }
-    .range-input-group input[type="number"] { width: 60px; padding: 4px; border: 1px solid #fca5a5; border-radius: 4px; text-align: right; font-size: 0.85rem; }
+    .range-input-group input[type="number"] { width: 60px; padding: 4px; border: 1px solid #fca5a5; border-radius: 4px; text-align: right; font-size: 0.8rem; }
     
-    .sub-item { background: var(--card); padding: 6px 8px; margin-bottom: 4px; border-radius: 6px; font-size: 0.85rem; border: 1px solid var(--border); cursor: pointer; transition: 0.2s; }
+    .sub-item { background: var(--card); padding: 6px 8px; margin-bottom: 4px; border-radius: 6px; font-size: 0.8rem; border: 1px solid var(--border); cursor: pointer; transition: 0.2s; }
     .sub-item:hover { border-color: var(--arc); background: #f5f3ff; }
     .sub-item.original { background: #e0e7ff; border-left: 3px solid var(--primary); }
-    .sub-source { font-size: 0.7rem; color: var(--sub); font-weight: 500; margin-bottom: 2px; }
+    .sub-source { font-size: 0.65rem; color: var(--sub); font-weight: 500; margin-bottom: 2px; }
 
     .msg-entry { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-bottom: 6px; cursor: pointer; transition: 0.2s; }
     .msg-entry:last-child { margin-bottom: 0; }
@@ -88,11 +93,11 @@
 
     .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 20; backdrop-filter: blur(2px); }
     .hidden { display: none !important; }
-    .modal-content { background: var(--card); padding: 20px; border-radius: 16px; width: 92%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
-    .modal-title { font-size: 1.1rem; margin-bottom: 10px; }
-    textarea { width: 100%; height: 80px; padding: 10px; margin: 10px 0; border: 1px solid var(--border); border-radius: 8px; resize: none; font-family: inherit; }
-    .modal-actions { display: flex; gap: 10px; margin-top: 10px; }
-    .modal-actions button { flex: 1; }
+    .modal-content { background: var(--card); padding: 16px; border-radius: 16px; width: 92%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+    .modal-title { font-size: 1rem; margin-bottom: 8px; }
+    textarea { width: 100%; height: 80px; padding: 8px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; resize: none; font-family: inherit; font-size: 0.9rem; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 8px; }
+    .modal-actions button { flex: 1; padding: 8px; }
 
     .gc-view-marker { background: transparent !important; border: none !important; font-size: 28px; line-height: 1; width: 30px; height: 30px; text-align: center; cursor: move; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
     .gc-view-marker.pulse { animation: pulse 2s infinite; }
@@ -102,37 +107,31 @@
     .gc-captured { filter: drop-shadow(0 0 5px var(--sub-range)) !important; }
     @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
     
-    /* 🔧 MOBILE OPTIMIZED LAYOUT */
+    /* 🔧 MOBILE DRAWER LAYOUT */
     @media (max-width: 768px) {
       #app { flex-direction: column; }
-      #map { flex: 0 0 42vh; width: 100%; height: auto; min-height: 200px; }
+      #map { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; z-index: 1; }
       #sidebar {
-        flex: 1;
-        width: 100%;
-        height: auto;
-        min-height: 0; /* CRITICAL: Allows flex child to shrink & scroll */
-        border-left: none;
-        border-top: 2px solid var(--border);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
+        position: fixed; bottom: 0; left: 0; right: 0;
+        width: 100%; height: 100vh;
+        background: var(--card);
+        border-top-left-radius: 20px; border-top-right-radius: 20px;
+        box-shadow: 0 -4px 25px rgba(0,0,0,0.15);
+        z-index: 10;
+        transform: translateY(65vh);
+        transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        display: flex; flex-direction: column;
+        overflow: hidden; touch-action: none;
       }
-      #filters {
-        flex-shrink: 0;
-        max-height: 45vh;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 8px;
+      .drag-handle {
+        width: 36px; height: 4px; background: #cbd5e1; border-radius: 2px;
+        margin: 10px auto 8px; cursor: grab; flex-shrink: 0;
+        user-select: none; -webkit-user-select: none;
       }
-      #content {
-        flex: 1;
-        min-height: 0; /* CRITICAL: Enables scrolling in nested flex */
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
-        padding: 10px;
-      }
-      .modal-content { width: 96%; max-width: 96%; margin: 0 10px; }
+      .drag-handle:active { background: #94a3b8; cursor: grabbing; }
+      #sidebar.dragging { transition: none !important; touch-action: pan-y; }
+      #sheet-footer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+      .modal-content { width: 96%; margin: 10px; max-height: 90vh; overflow-y: auto; }
     }
   </style>
 </head>
@@ -140,42 +139,45 @@
   <div id="app">
     <div id="map"></div>
     <aside id="sidebar">
+      <div class="drag-handle" id="sheetHandle"></div>
       <div class="sidebar-header">
-        <h2>📍 GeoChat</h2>
-        <div class="view-info" id="viewLocationInfo">📍 Locating...</div>
-        <button id="returnBtn">📍 Return to my location</button>
+        <div class="header-left">
+          <h2>📍 GeoChat</h2>
+          <div class="view-info" id="viewLocationInfo">📍 Locating...</div>
+        </div>
+        <button id="returnBtn" title="Return to GPS">🧭</button>
       </div>
-      
       <div class="tabs">
         <button class="tab active" onclick="switchTab('messages')">💬 Messages</button>
         <button class="tab subs" onclick="switchTab('subscriptions')">📡 Subscriptions</button>
       </div>
-      
-      <div id="filters">
-        <div class="filter-row" id="viewRangeRow" style="display:none;">
-          <span>🎯 Range:</span>
-          <div class="slider-container">
-            <input type="range" id="viewRadius" min="0" max="100" step="0.1" value="50">
-            <div class="slider-labels"><span>Micro</span><span id="sliderMax">10 km</span></div>
+      <div class="sheet-inner">
+        <div id="filters">
+          <div class="filter-row" id="viewRangeRow" style="display:none;">
+            <span>🎯 Range:</span>
+            <div class="slider-container">
+              <input type="range" id="viewRadius" min="0" max="100" step="0.1" value="50">
+              <div class="slider-labels"><span>Micro</span><span id="sliderMax">10 km</span></div>
+            </div>
+            <span id="radiusVal" style="min-width:60px;text-align:right;font-size:0.8rem;font-weight:500">5.00 km</span>
           </div>
-          <span id="radiusVal" style="min-width:65px;text-align:right;font-size:0.85rem;font-weight:500">5.00 km</span>
-        </div>
-
-        <label class="toggle-all"><input type="checkbox" id="showAll"> 🌍 Show All</label>
-        <div class="filter-row">
-          <span>⏱️ Time:</span>
-          <div class="slider-container">
-            <input type="range" id="time" min="0" max="100" step="0.1" value="50">
-            <div class="slider-labels"><span>1h</span><span>1yr</span></div>
+          <label class="toggle-all"><input type="checkbox" id="showAll"> 🌍 Show All</label>
+          <div class="filter-row">
+            <span>⏱️ Time:</span>
+            <div class="slider-container">
+              <input type="range" id="time" min="0" max="100" step="0.1" value="50">
+              <div class="slider-labels"><span>1h</span><span>1yr</span></div>
+            </div>
+            <span id="timeVal" style="min-width:60px;text-align:right;font-size:0.8rem;font-weight:500">30d</span>
           </div>
-          <span id="timeVal" style="min-width:65px;text-align:right;font-size:0.85rem;font-weight:500">30d</span>
+          <select id="categoryFilter"><option value="all">All Categories</option><option value="general">💬 General</option><option value="question">❓ Question</option><option value="event">🎉 Event</option><option value="warning">⚠️ Warning</option><option value="subscription">📡 Subscription</option></select>
+          <button id="refreshBtn">🔄 Apply Filters</button>
         </div>
-        
-        <select id="categoryFilter"><option value="all">All Categories</option><option value="general">💬 General</option><option value="question">❓ Question</option><option value="event">🎉 Event</option><option value="warning">⚠️ Warning</option><option value="subscription">📡 Subscription</option></select>
-        <button id="refreshBtn">🔄 Apply Filters</button>
-        <button id="demoBtn">🎲 Load Demo</button>
+        <div id="content"></div>
+        <div id="sheet-footer">
+          <button id="demoBtn" class="subtle-btn">🎲 Load Demo Data</button>
+        </div>
       </div>
-      <div id="content"></div>
     </aside>
 
     <div id="addModal" class="modal hidden">
@@ -203,31 +205,21 @@
       if(it.messages) it.messages.forEach(m => m.timestamp = toSec(m.timestamp));
     });
 
-    var realLocation = null;
-    var viewLocation = null;
-    var activeId = null;
-    var currentTab = 'messages';
-    var postTarget = { lat: null, lng: null, itemId: null };
-    var rangeEditorsOpen = {};
-    var viewRadius = 5;
-    var viewMarker = null;
-    
-    var currentMaxKm = 10; var currentItemMaxKm = 2; var minKm = 0.01;
-    var minTimeH = 1; var maxTimeH = 8760; var viewTimeH = 720;
+    var realLocation = null, viewLocation = null, activeId = null, currentTab = 'messages';
+    var postTarget = { lat: null, lng: null, itemId: null }, rangeEditorsOpen = {}, viewRadius = 5, viewMarker = null;
+    var currentMaxKm = 10, currentItemMaxKm = 2, minKm = 0.01, minTimeH = 1, maxTimeH = 8760, viewTimeH = 720;
     var allTags = ['general', 'question', 'event', 'warning', 'new'];
 
     var fmtDist = function(km) { if(km >= 1000) return (km/1000).toFixed(2)+'k km'; if(km >= 1) return Math.round(km) + ' km'; return km.toFixed(2) + ' km'; };
     var fmtTime = function(h) { return h<2?'1h':h<24?Math.round(h)+'h':h<168?Math.round(h/24)+'d':h<8760?(h/730).toFixed(1)+'mo':'1yr'; };
     var getDist = function(a, b) { var R=6371, toRad=Math.PI/180, dLat=(b.lat-a.lat)*toRad, dLon=(b.lng-a.lng)*toRad, aVal=Math.sin(dLat/2)**2+Math.cos(a.lat*toRad)*Math.cos(b.lat*toRad)*Math.sin(dLon/2)**2; return R*2*Math.atan2(Math.sqrt(aVal),Math.sqrt(1-aVal)); };
     var findItem = function(id) { for(var i=0;i<items.length;i++) if(items[i].id===id) return items[i]; return null; };
-
     function kmToPercent(km, max) { if(km < minKm) km = minKm; return Math.min(100, Math.max(0, 100 * (Math.log(km / minKm) / Math.log(max / minKm)))); }
     function percentToKm(percent, max) { return minKm * Math.pow(max / minKm, percent / 100); }
 
     window.toggleSubTag = function(subId, tag) {
       var sub = findItem(subId); if(!sub || !sub.allowedTags) return;
-      var idx = sub.allowedTags.indexOf(tag);
-      if(idx > -1) sub.allowedTags.splice(idx, 1); else sub.allowedTags.push(tag);
+      var idx = sub.allowedTags.indexOf(tag); if(idx > -1) sub.allowedTags.splice(idx, 1); else sub.allowedTags.push(tag);
       saveData(); applyFilters();
     };
 
@@ -243,7 +235,7 @@
           for(var j=0; j<item.messages.length; j++) {
             var m = item.messages[j], isOrig = j === 0;
             html += '<div class="sub-item '+(isOrig?'original':'')+'" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
-              + (isOrig ? '<div style="font-size:0.7rem;color:var(--primary);margin-bottom:2px">📍 Original</div>' : '')
+              + (isOrig ? '<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">📍 Original</div>' : '')
               + '<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+m.text+'</div>';
           }
         }
@@ -317,8 +309,8 @@
     }
 
     if(navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(function(p) { initLocation(p.coords.latitude, p.coords.longitude, true); }, function() { map.setView([0,0], 2); document.getElementById('viewLocationInfo').innerHTML = '📍 <span style="color:var(--warning)">GPS denied. Click map to start.</span>'; });
-    } else { document.getElementById('viewLocationInfo').innerHTML = '📍 Geolocation unsupported.'; }
+      navigator.geolocation.getCurrentPosition(function(p) { initLocation(p.coords.latitude, p.coords.longitude, true); }, function() { map.setView([0,0], 2); document.getElementById('viewLocationInfo').innerHTML = '📍 <span style="color:var(--warning)">GPS denied. Tap map.</span>'; });
+    } else { document.getElementById('viewLocationInfo').innerHTML = '📍 Geo unsupported.'; }
 
     map.on('click', function(e) { 
       if(!viewLocation) { initLocation(e.latlng.lat, e.latlng.lng, false); return; }
@@ -373,21 +365,13 @@
       var item = findItem(id); if(item) { item.range = num; saveData(); var slider = document.getElementById('range-slider-' + id); if(slider) slider.value = kmToPercent(num, currentItemMaxKm); var lbl = document.getElementById('range-label-' + id); if(lbl) lbl.textContent = num.toFixed(2) + ' km'; }
     };
     window.applyRangeChange = function(id) { applyFilters(); };
-    
     window.subscribeToBubble = function(id) {
       var item = findItem(id); if(!item) return;
-      items.push({ 
-        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), lat: item.lat, lng: item.lng, range: item.range, 
-        isThread: false, category: 'subscription', title: item.title, messages: [], isFromBubble: true, sourceBubbleId: id,
-        allowedTags: allTags,
-        createdAt: toSec(Date.now()),
-        viewLog: {}
-      });
+      items.push({ id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), lat: item.lat, lng: item.lng, range: item.range, isThread: false, category: 'subscription', title: item.title, messages: [], isFromBubble: true, sourceBubbleId: id, allowedTags: allTags, createdAt: toSec(Date.now()), viewLog: {} });
       saveData(); switchTab('subscriptions'); applyFilters();
     };
-
     window.editSubscription = function(id) { var i = findItem(id); if(!i) return; var t = prompt("Edit title:", i.title); if(t && t.trim()) { i.title = t.trim(); saveData(); applyFilters(); } };
-    window.deleteSubscription = function(id) { if(!confirm("Delete this subscription?")) return; var idx = items.findIndex(x => x.id === id); if(idx > -1) { items.splice(idx, 1); delete rangeEditorsOpen[id]; saveData(); applyFilters(); } };
+    window.deleteSubscription = function(id) { if(!confirm("Delete?")) return; var idx = items.findIndex(x => x.id === id); if(idx > -1) { items.splice(idx, 1); delete rangeEditorsOpen[id]; saveData(); applyFilters(); } };
     window.openModal = function(itemId) {
       var m = document.getElementById('addModal'), t = document.getElementById('modalTitle');
       if(itemId) { var i = findItem(itemId); t.textContent = '➕ Add to Thread: ' + (i?i.title:''); postTarget = { lat: i.lat, lng: i.lng, itemId: itemId }; }
@@ -398,9 +382,7 @@
     document.getElementById('time').addEventListener('input', function(e) { viewTimeH = minTimeH * Math.pow(maxTimeH/minTimeH, e.target.value/100); applyFilters(); });
 
     function renderMap(all) {
-      markersLayer.clearLayers();
-      var ico = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',subscription:'📡'};
-      var col = '#f87171';
+      markersLayer.clearLayers(); var ico = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',subscription:'📡'}; var col = '#f87171';
       all.forEach(item => { if(item.category === 'subscription' && item.range > 0 && (!item.isFromBubble || item.id === activeId)) L.circle([item.lat,item.lng],{radius:item.range*1000,color:col,fillColor:col,fillOpacity:0.12,weight:2,dashArray:'5,5'}).addTo(markersLayer); });
       all.forEach(item => {
         if(!item.lat||!item.lng||item.isFromBubble) return;
@@ -417,47 +399,32 @@
       var el = document.getElementById('content'); el.innerHTML = '';
       if(!all.length) { el.innerHTML = '<p class="empty">'+(currentTab==='subscriptions'?'No subscription bubbles.':'No messages in current range.')+'</p>'; return; }
       all.forEach(item => {
-        var s = item.category==='subscription';
-        var card = document.createElement('div');
+        var s = item.category==='subscription'; var card = document.createElement('div');
         card.className = 'card'+(s?(item.isFromBubble?' subscription bubble-sub':' subscription'):'');
-        card.dataset.id = item.id;
-        if(item.id === activeId) card.classList.add('active');
-        var d = fmtDist(item._dist);
-        var cm = {general:'💬 General',question:'❓ Question',event:'🎉 Event',warning:'⚠️ Warning'};
-        var bt = s?(item.isFromBubble?'🎈 Subscribed Bubble':'📡 Subscription'):(cm[item.category]||'💬 Message')+(item.isThread?' Thread':'');
+        card.dataset.id = item.id; if(item.id === activeId) card.classList.add('active');
+        var d = fmtDist(item._dist); var cm = {general:'💬 General',question:'❓ Question',event:'🎉 Event',warning:'⚠️ Warning'};
+        var bt = s?(item.isFromBubble?'🎈 Bubble':'📡 Subscription'):(cm[item.category]||'💬 Message')+(item.isThread?' Thread':'');
         var h = '<div class="msg-header"><span class="category-badge '+(s?'subscription':item.category)+'">'+bt+'</span><span class="distance">📏 '+d+'</span></div>';
-        
         if(s) {
           h += '<p class="msg-text" style="font-weight:500">'+item.title+'</p>';
           if(item.id===activeId) {
-            var rc = item.isFromBubble?'<button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️ Edit</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️ Delete</button><span style="font-size:0.75rem;color:var(--muted);align-self:center">📥 Locked</span>':'<button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️ Range</button><button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️ Edit</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️ Delete</button><span style="font-size:0.75rem;color:var(--muted);align-self:center">📥 '+item.capturedCount+' msgs</span>';
+            var rc = item.isFromBubble?'<button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">📥 Locked</span>':'<button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️</button><button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">📥 '+item.capturedCount+'</span>';
             h += '<div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;">'+rc+'</div>';
-            
-            var tags = item.allowedTags || [];
-            var tagIcons = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',new:'✨'};
-            h += '<div style="margin-top:6px;padding:6px;background:#f9fafb;border-radius:6px;font-size:0.75rem;"><div style="margin-bottom:4px;font-weight:500;color:var(--muted);">🎛️ Filters:</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
-            allTags.forEach(t => {
-              var checked = tags.includes(t) ? 'checked' : '';
-              var icon = tagIcons[t] || '•';
-              h += '<label style="cursor:pointer;display:flex;align-items:center;gap:2px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--card);"><input type="checkbox" '+checked+' onclick="event.stopPropagation();window.toggleSubTag(\''+item.id+'\',\''+t+'\')"> '+icon+' '+t.charAt(0).toUpperCase() + t.slice(1)+'</label>';
-            });
+            var tags = item.allowedTags || []; var tagIcons = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',new:'✨'};
+            h += '<div style="margin-top:4px;padding:4px 6px;background:#f9fafb;border-radius:6px;font-size:0.7rem;"><div style="margin-bottom:2px;font-weight:500;color:var(--muted);">🎛️ Filters:</div><div style="display:flex;gap:6px;flex-wrap:wrap;">';
+            allTags.forEach(t => { var chk = tags.includes(t) ? 'checked' : ''; h += '<label style="cursor:pointer;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--card);"><input type="checkbox" '+chk+' onclick="event.stopPropagation();window.toggleSubTag(\''+item.id+'\',\''+t+'\')"> '+tagIcons[t]+t.charAt(0).toUpperCase() + t.slice(1)+'</label>'; });
             h += '</div></div>';
-
-            if(rangeEditorsOpen[item.id] && !item.isFromBubble) {
-              var pct = kmToPercent(item.range, currentItemMaxKm);
-              h += '<div class="range-editor open" onclick="event.stopPropagation()">'+'<label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group">'+'<input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)">'+'<input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValueFromNum(\''+item.id+'\',this.value);applyRangeChange(\''+item.id+'\')">'+'</div></div>';
-            }
-          } else h += '<div style="font-size:0.75rem;color:var(--muted);margin:6px 0">'+(item.isFromBubble?'📥 Locked':'📥 '+item.capturedCount+' msgs')+'</div>';
-          
-          if(item.isFromBubble && item._bubbleContent) { h += '<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);">'+getBubbleInnerHTML(item._bubbleContent, false)+'</div>'; }
-          else if(item.capturedGroups) { h += '<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:12px;">'; item.capturedGroups.forEach((g,gi) => { h += getBubbleInnerHTML({id:g.sourceId, category:g.messages[0]?.category||'general', isThread:g.messages.length>1, title:g.sourceTitle, messages:g.messages, _dist:g.distance}, g.messages[0]?g.messages[0].isNew:false); if(gi < item.capturedGroups.length-1) h+='<div style="height:1px;background:var(--border);margin:4px 0;"></div>'; }); h+='</div>'; }
-          else if(item.id===activeId && !item.isFromBubble) h += '<div style="padding:10px;text-align:center;color:var(--muted);font-size:0.85rem">No messages match filters.</div>';
+            if(rangeEditorsOpen[item.id] && !item.isFromBubble) { var pct = kmToPercent(item.range, currentItemMaxKm); h += '<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group"><input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)"><input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValueFromNum(\''+item.id+'\',this.value);applyRangeChange(\''+item.id+'\')"></div></div>'; }
+          } else h += '<div style="font-size:0.7rem;color:var(--muted);margin:4px 0">'+(item.isFromBubble?'📥 Locked':'📥 '+item.capturedCount+' msgs')+'</div>';
+          if(item.isFromBubble && item._bubbleContent) { h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">'+getBubbleInnerHTML(item._bubbleContent, false)+'</div>'; }
+          else if(item.capturedGroups) { h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px;">'; item.capturedGroups.forEach((g,gi) => { h += getBubbleInnerHTML({id:g.sourceId, category:g.messages[0]?.category||'general', isThread:g.messages.length>1, title:g.sourceTitle, messages:g.messages, _dist:g.distance}, g.messages[0]?g.messages[0].isNew:false); if(gi < item.capturedGroups.length-1) h+='<div style="height:1px;background:var(--border);margin:2px 0;"></div>'; }); h+='</div>'; }
+          else if(item.id===activeId && !item.isFromBubble) h += '<div style="padding:8px;text-align:center;color:var(--muted);font-size:0.8rem">No messages.</div>';
         } else {
           if(item.isThread) {
-            h += '<p class="msg-text" style="font-weight:500">'+item.title+'</p><button class="action-btn" style="margin-top:6px;margin-right:6px;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Subscribe</button>';
-            if(item.id===activeId) { h += '<div style="display:flex;gap:6px;margin:6px 0;"><button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️ Range</button><button class="action-btn" onclick="event.stopPropagation();openModal(\''+item.id+'\')">➕ Add</button><span style="font-size:0.75rem;color:var(--muted);align-self:center">💬 '+item.messages.length+'</span></div>'; if(rangeEditorsOpen[item.id]) { var pct = kmToPercent(item.range, currentItemMaxKm); h+='<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group"><input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)"><input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValueFromNum(\''+item.id+'\',this.value);applyRangeChange(\''+item.id+'\')"></div></div>'; } } else h += '<div style="font-size:0.75rem;color:var(--muted);margin:6px 0">💬 '+item.messages.length+' msgs</div>';
-            if(item.messages) item.messages.forEach((m,j)=>{ h+='<div class="sub-item'+(j===0?' original':'')+'" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')">'+(j===0?'<div style="font-size:0.7rem;color:var(--primary);margin-bottom:2px">📍 Original</div>':'')+'<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+m.text+'</div>'; });
-          } else { var m = item.messages[0]; h+='<div class="msg-entry" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')"><p class="msg-text" style="margin-bottom:2px">'+m.text+'</p><div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div></div><button class="action-btn" style="margin-top:6px;" onclick="event.stopPropagation();turnIntoBubble(\''+item.id+'\')">🎈 Turn into Bubble</button>'; }
+            h += '<p class="msg-text" style="font-weight:500">'+item.title+'</p><button class="action-btn" style="margin-top:4px;margin-right:4px;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>';
+            if(item.id===activeId) { h += '<div style="display:flex;gap:4px;margin:4px 0;"><button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️</button><button class="action-btn" onclick="event.stopPropagation();openModal(\''+item.id+'\')">➕</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">💬 '+item.messages.length+'</span></div>'; if(rangeEditorsOpen[item.id]) { var pct = kmToPercent(item.range, currentItemMaxKm); h+='<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group"><input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)"><input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValueFromNum(\''+item.id+'\',this.value);applyRangeChange(\''+item.id+'\')"></div></div>'; } } else h += '<div style="font-size:0.7rem;color:var(--muted);margin:4px 0">💬 '+item.messages.length+' msgs</div>';
+            if(item.messages) item.messages.forEach((m,j)=>{ h+='<div class="sub-item'+(j===0?' original':'')+'" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')">'+(j===0?'<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">📍 Original</div>':'')+'<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+m.text+'</div>'; });
+          } else { var m = item.messages[0]; h+='<div class="msg-entry" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')"><p class="msg-text" style="margin-bottom:2px">'+m.text+'</p><div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div></div><button class="action-btn" style="margin-top:4px;" onclick="event.stopPropagation();turnIntoBubble(\''+item.id+'\')">🎈 Bubble</button>'; }
         }
         card.innerHTML = h; card.onclick = e => { if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.closest('.range-editor')||e.target.closest('.sub-item')||e.target.closest('.msg-entry')) return; setActive(item.id); }; el.appendChild(card);
       });
@@ -467,96 +434,72 @@
       var sa = document.getElementById('showAll').checked, cat = document.getElementById('categoryFilter').value;
       var ur = sa ? Infinity : viewRadius; document.getElementById('radiusVal').textContent = sa ? '∞' : fmtDist(ur);
       document.getElementById('timeVal').textContent = fmtTime(viewTimeH);
-      
-      var now = toSec(Date.now());
-      var cut = now - (viewTimeH * 3600);
+      var now = toSec(Date.now()), cut = now - (viewTimeH * 3600);
       var capIds = new Set(), subs = [], msgs = [], mapMsgs = [];
 
       items.forEach(it => { 
         if(it.category!=='subscription') return; 
-        if(!it.viewLog) it.viewLog = {};
-        if(!it.allowedTags) it.allowedTags = allTags.slice();
-        if(!it.createdAt) it.createdAt = toSec(Date.now());
-
+        if(!it.viewLog) it.viewLog = {}; if(!it.allowedTags) it.allowedTags = allTags.slice(); if(!it.createdAt) it.createdAt = toSec(Date.now());
         var d=getDist(viewLocation,it); 
         if(it.isFromBubble && it.sourceBubbleId){ var sb=findItem(it.sourceBubbleId); if(sb)it._bubbleContent=sb; } 
         else { 
           var cg={}; 
           items.forEach(sc=>{ 
-            if(sc.id===it.id||sc.category==='subscription')return; 
-            var ds=getDist(it,sc); 
+            if(sc.id===it.id||sc.category==='subscription')return; var ds=getDist(it,sc); 
             if(ds<=it.range){ 
-              var v=[]; 
-              sc.messages.forEach(m=>{ 
-                m.timestamp = toSec(m.timestamp);
-                if(m.timestamp>=cut) {
-                  var isMarkerNew = toSec(sc.createdAt) >= it.createdAt;
-                  if (!it.viewLog[sc.id]) it.viewLog[sc.id] = now;
-                  var firstSeen = it.viewLog[sc.id];
-                  var isSeenRecently = (now - firstSeen) < 86400;
-                  var isNew = isMarkerNew && isSeenRecently;
-                  m.isNew = isNew;
-
-                  var tags = it.allowedTags || [];
-                  var isCatMatch = tags.length === 0 || tags.includes(m.category);
-                  var isNewMatch = !tags.includes('new') || isNew;
-
-                  if(isCatMatch && isNewMatch) {
-                    v.push(m); capIds.add(sc.id);
-                  }
-                } 
-              }); 
+              var v=[]; sc.messages.forEach(m=>{ m.timestamp=toSec(m.timestamp); if(m.timestamp>=cut){ if(!it.viewLog[sc.id])it.viewLog[sc.id]=now; var isNew=(toSec(sc.createdAt)>=it.createdAt)&&(now-it.viewLog[sc.id]<86400); m.isNew=isNew; var tags=it.allowedTags||[],isCatMatch=tags.length===0||tags.includes(m.category); if(isCatMatch && (!tags.includes('new')||isNew)){v.push(m);capIds.add(sc.id);} }}); 
               if(v.length){v.sort((a,b)=>b.timestamp-a.timestamp);cg[sc.id]={sourceId:sc.id,sourceTitle:sc.title,distance:ds,messages:v};} 
             } 
-          }); 
-          var ga=Object.values(cg).sort((a,b)=>a.distance-b.distance); var tc=0; ga.forEach(g=>tc+=g.messages.length); 
-          it.capturedGroups=ga; it.capturedCount=tc; 
-        } 
-        subs.push(Object.assign({},it,{_dist:d})); 
+          }); var ga=Object.values(cg).sort((a,b)=>a.distance-b.distance); var tc=0; ga.forEach(g=>tc+=g.messages.length); it.capturedGroups=ga; it.capturedCount=tc; 
+        } subs.push(Object.assign({},it,{_dist:d})); 
       });
 
       items.forEach(it => { if(it.category==='subscription')return; var vm=[]; it.messages.forEach(m=>{m.timestamp=toSec(m.timestamp);if(m.timestamp>=cut)vm.push(m);}); if(!vm.length)return; var d=getDist(viewLocation,it), cm=cat==='all'||it.category===cat, ic=capIds.has(it.id); if((d<=ur||ic)&&cm)mapMsgs.push(Object.assign({},it,{_dist:d,messages:vm,_isCaptured:ic})); if(d<=ur&&cm)msgs.push(Object.assign({},it,{_dist:d,messages:vm,_isCaptured:ic})); });
-      
-      renderMap(mapMsgs.concat(subs)); 
-      var li = currentTab==='subscriptions' ? subs : msgs; li.sort((a,b)=>a._dist-b._dist); 
-      renderList(li); 
-      radiusCircle.setRadius(sa?200000000:ur*1000);
-      saveData();
+      renderMap(mapMsgs.concat(subs)); var li = currentTab==='subscriptions' ? subs : msgs; li.sort((a,b)=>a._dist-b._dist); renderList(li); radiusCircle.setRadius(sa?200000000:ur*1000); saveData();
     }
 
-    function updateUI() { var isR = realLocation && getDist(viewLocation, realLocation)<0.1; document.getElementById('viewLocationInfo').innerHTML = isR ? '📍 <span class="highlight">Your GPS</span>' : '👁️ <span class="highlight">'+(viewLocation?viewLocation.lat.toFixed(4)+', '+viewLocation.lng.toFixed(4):'Click map to start')+'</span>'; document.getElementById('returnBtn').style.display = isR && viewLocation ? 'none' : (realLocation ? 'block' : 'none'); }
+    function updateUI() { var isR = realLocation && getDist(viewLocation, realLocation)<0.1; document.getElementById('viewLocationInfo').innerHTML = isR ? '📍 <span class="highlight">GPS</span>' : '👁️ <span class="highlight">'+(viewLocation?viewLocation.lat.toFixed(4)+', '+viewLocation.lng.toFixed(4):'Tap map')+'</span>'; document.getElementById('returnBtn').style.display = isR && viewLocation ? 'none' : (realLocation ? 'flex' : 'none'); }
     document.getElementById('returnBtn').onclick = () => { if(realLocation){ viewLocation={...realLocation}; viewMarker.setLatLng(viewLocation); radiusCircle.setLatLng(viewLocation); radiusCircle.setRadius(viewRadius*1000); refreshViewIcon(); updateUI(); applyFilters(); map.panTo(viewLocation,{animate:true}); }};
     document.getElementById('refreshBtn').onclick = () => applyFilters();
     document.getElementById('cancelBtn').onclick = () => document.getElementById('addModal').classList.add('hidden');
     document.getElementById('categoryFilter').onchange = () => applyFilters();
     document.getElementById('showAll').onchange = e => { if(e.target.checked) { viewRadius=currentMaxKm; document.getElementById('viewRadius').value=100; document.getElementById('radiusVal').textContent='∞'; radiusCircle.setRadius(200000000); } applyFilters(); };
-    
-    document.getElementById('submitBtn').onclick = () => { 
-      var t=document.getElementById('msgText').value.trim(); if(!t)return alert('Enter text'); 
-      var c=document.getElementById('msgCategory').value; 
-      var nm={id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:postTarget.lat,lng:postTarget.lng,text:t,category:c,author:'User_'+Math.floor(Math.random()*9000+1000),timestamp:toSec(Date.now())}; 
-      if(postTarget.itemId){ var i=findItem(postTarget.itemId); if(i&&i.category!=='subscription'){i.messages.push(nm);i.title=i.messages[0].text.length>20?i.messages[0].text.substring(0,20)+'…':i.messages[0].text;}} 
-      else items.push({id:nm.id,lat:nm.lat,lng:nm.lng,range:c==='subscription'?viewRadius:0,isThread:false,category:c,title:t.length>20?t.substring(0,20)+'…':t,messages:c==='subscription'?[]:[nm], createdAt:nm.timestamp}); 
-      document.getElementById('addModal').classList.add('hidden');document.getElementById('msgText').value='';postTarget={lat:null,lng:null,itemId:null};saveData();applyFilters();
-    };
-    
-    document.getElementById('demoBtn').onclick = () => { 
-      if(items.length>10 && !confirm('Replace data?'))return; 
-      var cats=['general','question','event','warning'], txts=['Coffee ☕','Open?','Event 🎵','Alert ⚠️','View 🌅','Walk?','Traffic 🚗','Shop 🛍️','Dog 🐕','Music 🎻']; 
-      var di=[]; var nowSec = toSec(Date.now()); 
-      for(var i=0;i<12;i++){
-        var dist=[0.1,0.5,2,10,30][Math.floor(Math.random()*5)],ang=Math.random()*Math.PI*2; 
-        var dl=(dist/111.32)*Math.cos(ang),dln=(dist/(111.32*Math.cos(viewLocation.lat*Math.PI/180)))*Math.sin(ang); 
-        var t=txts[Math.floor(Math.random()*txts.length)]; 
-        var msgTs = nowSec - Math.floor(Math.random()*86400*7);
-        di.push({id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:viewLocation.lat+dl,lng:viewLocation.lng+dln,range:0,isThread:false,category:cats[Math.floor(Math.random()*cats.length)],title:t.length>20?t.substring(0,20)+'…':t, createdAt:msgTs, messages:[{id:crypto.randomUUID(),text:t,category:cats[Math.floor(Math.random()*cats.length)],author:'Demo_'+(i+1),timestamp:msgTs}]});
-      } 
-      di.push({id:crypto.randomUUID(),lat:viewLocation.lat,lng:viewLocation.lng,range:Math.min(5,currentItemMaxKm),isThread:false,category:'subscription',title:'Local Feed 📡',messages:[],allowedTags:allTags,createdAt:nowSec,viewLog:{}}); 
-      items=di;saveData();applyFilters();
-    };
-    
+    document.getElementById('submitBtn').onclick = () => { var t=document.getElementById('msgText').value.trim(); if(!t)return alert('Enter text'); var c=document.getElementById('msgCategory').value; var nm={id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:postTarget.lat,lng:postTarget.lng,text:t,category:c,author:'User_'+Math.floor(Math.random()*9000+1000),timestamp:toSec(Date.now())}; if(postTarget.itemId){ var i=findItem(postTarget.itemId); if(i&&i.category!=='subscription'){i.messages.push(nm);i.title=i.messages[0].text.length>20?i.messages[0].text.substring(0,20)+'…':i.messages[0].text;}} else items.push({id:nm.id,lat:nm.lat,lng:nm.lng,range:c==='subscription'?viewRadius:0,isThread:false,category:c,title:t.length>20?t.substring(0,20)+'…':t,messages:c==='subscription'?[]:[nm], createdAt:nm.timestamp}); document.getElementById('addModal').classList.add('hidden');document.getElementById('msgText').value='';postTarget={lat:null,lng:null,itemId:null};saveData();applyFilters();};
+    document.getElementById('demoBtn').onclick = () => { if(items.length>10 && !confirm('Replace data?'))return; var cats=['general','question','event','warning'], txts=['Coffee ☕','Open?','Event 🎵','Alert ⚠️','View 🌅','Walk?','Traffic 🚗','Shop 🛍️','Dog 🐕','Music 🎻']; var di=[]; var nowSec = toSec(Date.now()); for(var i=0;i<12;i++){var dist=[0.1,0.5,2,10,30][Math.floor(Math.random()*5)],ang=Math.random()*Math.PI*2; var dl=(dist/111.32)*Math.cos(ang),dln=(dist/(111.32*Math.cos(viewLocation.lat*Math.PI/180)))*Math.sin(ang); var t=txts[Math.floor(Math.random()*txts.length)]; var msgTs = nowSec - Math.floor(Math.random()*86400*7); di.push({id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:viewLocation.lat+dl,lng:viewLocation.lng+dln,range:0,isThread:false,category:cats[Math.floor(Math.random()*cats.length)],title:t.length>20?t.substring(0,20)+'…':t, createdAt:msgTs, messages:[{id:crypto.randomUUID(),text:t,category:cats[Math.floor(Math.random()*cats.length)],author:'Demo_'+(i+1),timestamp:msgTs}]});} di.push({id:crypto.randomUUID(),lat:viewLocation.lat,lng:viewLocation.lng,range:Math.min(5,currentItemMaxKm),isThread:false,category:'subscription',title:'Local Feed 📡',messages:[],allowedTags:allTags,createdAt:nowSec,viewLog:{}}); items=di;saveData();applyFilters();};
     function saveData() { localStorage.setItem('gc_items', JSON.stringify(items)); }
     initTimeSlider(); function initTimeSlider(){ var r=viewTimeH/minTimeH, mr=maxTimeH/minTimeH; document.getElementById('time').value=Math.min(100,Math.max(0,100*(Math.log(r)/Math.log(mr)))); document.getElementById('timeVal').textContent=fmtTime(viewTimeH); }
+
+    // 🔧 MOBILE DRAWER DRAG
+    (function() {
+      var sheet = document.getElementById('sidebar');
+      var handle = document.getElementById('sheetHandle');
+      var state = 'peek', startY = 0, startTranslate = window.innerHeight * 0.65, isDragging = false;
+
+      function updateTransform() { sheet.style.transform = `translateY(${startTranslate}px)`; }
+      function snap() {
+        if (window.innerWidth > 768) { sheet.style.transform = 'none'; return; }
+        var h = window.innerHeight;
+        if (startTranslate < h * 0.15) state = 'full';
+        else if (startTranslate < h * 0.4) state = 'half';
+        else state = 'peek';
+        startTranslate = state === 'full' ? 0 : state === 'half' ? h * 0.5 : h * 0.65;
+        sheet.classList.remove('dragging');
+        sheet.style.transform = `translateY(${startTranslate}px)`;
+      }
+      function onDragStart(y) { if (window.innerWidth > 768) return; startY = y; isDragging = true; sheet.classList.add('dragging'); }
+      function onDragMove(y) { if (!isDragging) return; startTranslate += (y - startY); startY = y; sheet.style.transform = `translateY(${startTranslate}px)`; }
+      function onDragEnd() { if (isDragging) { isDragging = false; snap(); } }
+
+      handle.addEventListener('touchstart', e => onDragStart(e.touches[0].clientY), {passive: true});
+      handle.addEventListener('mousedown', e => onDragStart(e.clientY));
+      window.addEventListener('touchmove', e => onDragMove(e.touches[0].clientY), {passive: true});
+      window.addEventListener('mousemove', e => onDragMove(e.clientY));
+      window.addEventListener('touchend', onDragEnd);
+      window.addEventListener('mouseup', onDragEnd);
+      handle.addEventListener('click', e => { if(isDragging) return; state = state === 'peek' ? 'half' : state === 'half' ? 'full' : 'peek'; startTranslate = state === 'full' ? 0 : state === 'half' ? window.innerHeight * 0.5 : window.innerHeight * 0.65; snap(); });
+      updateTransform();
+      window.addEventListener('resize', () => { startTranslate = window.innerWidth > 768 ? 0 : window.innerHeight * 0.65; updateTransform(); });
+    })();
   </script>
 </body>
 </html>
