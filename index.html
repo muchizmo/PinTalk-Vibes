@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v60 - Fixed Drawer & Unified Scroll</title>
+  <title>GeoChat v62 - Drawer Stability & UX Fix</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -13,11 +13,12 @@
       --sub-range: #f87171; --sub-range-bg: #fef2f2;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-    body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+    body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; overscroll-behavior: none; }
     #app { display: flex; height: 100vh; position: relative; }
     #map { flex: 1; height: 100%; z-index: 1; }
     #sidebar { width: 360px; background: var(--card); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; position: relative; }
     
+    /* 🔧 FIXED HANDLE: Always accessible at top */
     .drag-handle {
       position: fixed;
       top: 8px; left: 50%; transform: translateX(-50%);
@@ -139,7 +140,9 @@
         transform: translateY(65vh);
         transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
         display: flex; flex-direction: column;
-        overflow: hidden; touch-action: none;
+        overflow: hidden; 
+        /* Disable touch action on sidebar to prevent browser scrolling/refreshing */
+        touch-action: none;
       }
       .modal-content { width: 96%; margin: 10px; max-height: 90vh; overflow-y: auto; }
     }
@@ -216,7 +219,7 @@
     });
 
     var realLocation = null;
-    var viewLocation = { lat: 0, lng: 0 }; // 🔧 FIX: Default value prevents crash
+    var viewLocation = { lat: 0, lng: 0 }; 
     var activeId = null, currentTab = 'messages';
     var postTarget = { lat: null, lng: null, itemId: null }, rangeEditorsOpen = {}, viewRadius = 5, viewMarker = null;
     var currentMaxKm = 10, currentItemMaxKm = 2, minKm = 0.01, minTimeH = 1, maxTimeH = 8760, viewTimeH = 720;
@@ -488,7 +491,7 @@
     function saveData() { localStorage.setItem('gc_items', JSON.stringify(items)); }
     initTimeSlider(); function initTimeSlider(){ var r=viewTimeH/minTimeH, mr=maxTimeH/minTimeH; document.getElementById('time').value=Math.min(100,Math.max(0,100*(Math.log(r)/Math.log(mr)))); document.getElementById('timeVal').textContent=fmtTime(viewTimeH); }
 
-    // 🔧 MOBILE DRAG FIXED
+    // 🔧 MOBILE DRAG FIXED & STABLE
     (function() {
       var sheet = document.getElementById('sidebar');
       var handle = document.getElementById('sheetHandle');
@@ -498,31 +501,55 @@
       function snap() {
         if (window.innerWidth > 768) { sheet.style.transform = 'none'; return; }
         var h = window.innerHeight;
+        // 🔧 Strict clamping states
         if (startTranslate < h * 0.15) state = 'full';
         else if (startTranslate < h * 0.4) state = 'half';
         else state = 'peek';
+        
+        // 🔧 HARD LOCK: Never allow negative values
         startTranslate = Math.max(0, state === 'full' ? 0 : state === 'half' ? h * 0.5 : h * 0.65);
         sheet.classList.remove('dragging');
         sheet.style.transform = `translateY(${startTranslate}px)`;
       }
-      function onDragStart(y) { if (window.innerWidth > 768) return; startY = y; isDragging = true; sheet.classList.add('dragging'); }
-      function onDragMove(y) { 
+      function onDragStart(y) { 
+        if (window.innerWidth > 768) return; 
+        startY = y; 
+        isDragging = true; 
+        sheet.classList.add('dragging'); 
+      }
+      function onDragMove(y, e) { 
         if (!isDragging) return; 
+        // 🔧 Prevent browser gestures interfering
+        if(e) e.preventDefault();
+        
         var diff = y - startY;
         startY = y;
-        // 🔧 Strict clamping prevents going off top
-        startTranslate = Math.max(0, Math.min(window.innerHeight * 0.9, startTranslate + diff));
+        
+        // 🔧 HARD LOCK: Clamp between 0 and 90% height
+        var nextVal = startTranslate + diff;
+        if (nextVal < 0) nextVal = 0;
+        if (nextVal > window.innerHeight * 0.9) nextVal = window.innerHeight * 0.9;
+        
+        startTranslate = nextVal;
         sheet.style.transform = `translateY(${startTranslate}px)`;
       }
       function onDragEnd() { if (isDragging) { isDragging = false; snap(); } }
 
       handle.addEventListener('touchstart', e => onDragStart(e.touches[0].clientY), {passive: true});
       handle.addEventListener('mousedown', e => onDragStart(e.clientY));
-      window.addEventListener('touchmove', e => onDragMove(e.touches[0].clientY), {passive: true});
-      window.addEventListener('mousemove', e => onDragMove(e.clientY));
+      
+      // 🔧 Passive: false to allow preventDefault
+      window.addEventListener('touchmove', e => onDragMove(e.touches[0].clientY, e), {passive: false});
+      window.addEventListener('mousemove', e => onDragMove(e.clientY, e));
       window.addEventListener('touchend', onDragEnd);
       window.addEventListener('mouseup', onDragEnd);
-      handle.addEventListener('click', e => { if(isDragging) return; state = state === 'peek' ? 'half' : state === 'half' ? 'full' : 'peek'; startTranslate = Math.max(0, state === 'full' ? 0 : state === 'half' ? window.innerHeight * 0.5 : window.innerHeight * 0.65); snap(); });
+      
+      handle.addEventListener('click', e => { 
+        if(isDragging) return; 
+        state = state === 'peek' ? 'half' : state === 'half' ? 'full' : 'peek'; 
+        startTranslate = Math.max(0, state === 'full' ? 0 : state === 'half' ? window.innerHeight * 0.5 : window.innerHeight * 0.65); 
+        snap(); 
+      });
       updateTransform();
       window.addEventListener('resize', () => { startTranslate = window.innerWidth > 768 ? 0 : window.innerHeight * 0.65; updateTransform(); });
     })();
