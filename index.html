@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v58 - Mobile Drawer & Compact UI</title>
+  <title>GeoChat v59 - Mobile Drawer Fixes & Live Filters</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -16,7 +16,7 @@
     body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
     #app { display: flex; height: 100vh; position: relative; }
     #map { flex: 1; height: 100%; z-index: 1; }
-    #sidebar { width: 360px; background: var(--card); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
+    #sidebar { width: 360px; background: var(--card); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; position: relative; }
     
     /* 🔧 COMPACT HEADER */
     .sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--accent); gap: 8px; flex-shrink: 0; }
@@ -44,13 +44,13 @@
     .toggle-all { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; }
     select, button { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); cursor: pointer; font-size: 0.85rem; }
     button:hover { background: #e5e7eb; }
-    #refreshBtn { background: var(--primary); color: white; border: none; font-weight: 500; }
-    #refreshBtn:hover { background: var(--primary-hover); }
-
-    .sheet-inner { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
-    #content { flex: 1; overflow-y: auto; padding: 8px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+    
+    /* 🔧 UNIFIED SCROLL CONTAINER */
+    .sheet-inner { flex: 1; overflow-y: auto; padding: 0; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; min-height: 0; display: flex; flex-direction: column; }
+    
+    #content { flex: 1; padding: 8px 12px; }
     #sheet-footer { padding: 12px; text-align: center; border-top: 1px solid var(--border); flex-shrink: 0; }
-    .subtle-btn { background: transparent; border: none; color: var(--muted); font-size: 0.8rem; padding: 4px 8px; border-radius: 12px; cursor: pointer; transition: 0.2s; }
+    .subtle-btn { background: transparent; border: none; color: var(--muted); font-size: 0.8rem; padding: 8px 16px; border-radius: 12px; cursor: pointer; transition: 0.2s; }
     .subtle-btn:hover { background: var(--accent); color: var(--text); }
 
     .empty { text-align: center; color: var(--muted); margin-top: 30px; font-size: 0.9rem; }
@@ -107,7 +107,7 @@
     .gc-captured { filter: drop-shadow(0 0 5px var(--sub-range)) !important; }
     @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
     
-    /* 🔧 MOBILE DRAWER LAYOUT */
+    /* 🔧 MOBILE DRAWER LAYOUT & FIXED HANDLE */
     @media (max-width: 768px) {
       #app { flex-direction: column; }
       #map { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; z-index: 1; }
@@ -122,15 +122,19 @@
         transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
         display: flex; flex-direction: column;
         overflow: hidden; touch-action: none;
+        padding-top: 28px; /* Space for fixed handle */
       }
+      /* 🔧 Fixed Handle Always at Top of Screen */
       .drag-handle {
+        position: fixed;
+        top: 8px; left: 50%; transform: translateX(-50%);
         width: 36px; height: 4px; background: #cbd5e1; border-radius: 2px;
-        margin: 10px auto 8px; cursor: grab; flex-shrink: 0;
+        cursor: grab; z-index: 1001;
         user-select: none; -webkit-user-select: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
       }
       .drag-handle:active { background: #94a3b8; cursor: grabbing; }
       #sidebar.dragging { transition: none !important; touch-action: pan-y; }
-      #sheet-footer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
       .modal-content { width: 96%; margin: 10px; max-height: 90vh; overflow-y: auto; }
     }
   </style>
@@ -151,6 +155,7 @@
         <button class="tab active" onclick="switchTab('messages')">💬 Messages</button>
         <button class="tab subs" onclick="switchTab('subscriptions')">📡 Subscriptions</button>
       </div>
+      <!-- 🔧 Unified Scroll Container -->
       <div class="sheet-inner">
         <div id="filters">
           <div class="filter-row" id="viewRangeRow" style="display:none;">
@@ -171,7 +176,7 @@
             <span id="timeVal" style="min-width:60px;text-align:right;font-size:0.8rem;font-weight:500">30d</span>
           </div>
           <select id="categoryFilter"><option value="all">All Categories</option><option value="general">💬 General</option><option value="question">❓ Question</option><option value="event">🎉 Event</option><option value="warning">⚠️ Warning</option><option value="subscription">📡 Subscription</option></select>
-          <button id="refreshBtn">🔄 Apply Filters</button>
+          <!-- 🔧 Apply Filters Button Removed -->
         </div>
         <div id="content"></div>
         <div id="sheet-footer">
@@ -378,8 +383,14 @@
       else t.textContent = '📝 Leave a Message'; m.classList.remove('hidden');
     };
 
+    // 🔧 LIVE FILTER LISTENERS
     document.getElementById('viewRadius').addEventListener('input', function(e) { viewRadius = percentToKm(parseFloat(e.target.value), currentMaxKm); document.getElementById('radiusVal').textContent = fmtDist(viewRadius); radiusCircle.setRadius(viewRadius * 1000); if(!document.getElementById('showAll').checked) applyFilters(); });
     document.getElementById('time').addEventListener('input', function(e) { viewTimeH = minTimeH * Math.pow(maxTimeH/minTimeH, e.target.value/100); applyFilters(); });
+    document.getElementById('categoryFilter').addEventListener('change', applyFilters);
+    document.getElementById('showAll').addEventListener('change', function(e) { 
+      if(e.target.checked) { viewRadius=currentMaxKm; document.getElementById('viewRadius').value=100; document.getElementById('radiusVal').textContent='∞'; radiusCircle.setRadius(200000000); } 
+      applyFilters(); 
+    });
 
     function renderMap(all) {
       markersLayer.clearLayers(); var ico = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',subscription:'📡'}; var col = '#f87171';
@@ -460,16 +471,13 @@
 
     function updateUI() { var isR = realLocation && getDist(viewLocation, realLocation)<0.1; document.getElementById('viewLocationInfo').innerHTML = isR ? '📍 <span class="highlight">GPS</span>' : '👁️ <span class="highlight">'+(viewLocation?viewLocation.lat.toFixed(4)+', '+viewLocation.lng.toFixed(4):'Tap map')+'</span>'; document.getElementById('returnBtn').style.display = isR && viewLocation ? 'none' : (realLocation ? 'flex' : 'none'); }
     document.getElementById('returnBtn').onclick = () => { if(realLocation){ viewLocation={...realLocation}; viewMarker.setLatLng(viewLocation); radiusCircle.setLatLng(viewLocation); radiusCircle.setRadius(viewRadius*1000); refreshViewIcon(); updateUI(); applyFilters(); map.panTo(viewLocation,{animate:true}); }};
-    document.getElementById('refreshBtn').onclick = () => applyFilters();
     document.getElementById('cancelBtn').onclick = () => document.getElementById('addModal').classList.add('hidden');
-    document.getElementById('categoryFilter').onchange = () => applyFilters();
-    document.getElementById('showAll').onchange = e => { if(e.target.checked) { viewRadius=currentMaxKm; document.getElementById('viewRadius').value=100; document.getElementById('radiusVal').textContent='∞'; radiusCircle.setRadius(200000000); } applyFilters(); };
     document.getElementById('submitBtn').onclick = () => { var t=document.getElementById('msgText').value.trim(); if(!t)return alert('Enter text'); var c=document.getElementById('msgCategory').value; var nm={id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:postTarget.lat,lng:postTarget.lng,text:t,category:c,author:'User_'+Math.floor(Math.random()*9000+1000),timestamp:toSec(Date.now())}; if(postTarget.itemId){ var i=findItem(postTarget.itemId); if(i&&i.category!=='subscription'){i.messages.push(nm);i.title=i.messages[0].text.length>20?i.messages[0].text.substring(0,20)+'…':i.messages[0].text;}} else items.push({id:nm.id,lat:nm.lat,lng:nm.lng,range:c==='subscription'?viewRadius:0,isThread:false,category:c,title:t.length>20?t.substring(0,20)+'…':t,messages:c==='subscription'?[]:[nm], createdAt:nm.timestamp}); document.getElementById('addModal').classList.add('hidden');document.getElementById('msgText').value='';postTarget={lat:null,lng:null,itemId:null};saveData();applyFilters();};
     document.getElementById('demoBtn').onclick = () => { if(items.length>10 && !confirm('Replace data?'))return; var cats=['general','question','event','warning'], txts=['Coffee ☕','Open?','Event 🎵','Alert ⚠️','View 🌅','Walk?','Traffic 🚗','Shop 🛍️','Dog 🐕','Music 🎻']; var di=[]; var nowSec = toSec(Date.now()); for(var i=0;i<12;i++){var dist=[0.1,0.5,2,10,30][Math.floor(Math.random()*5)],ang=Math.random()*Math.PI*2; var dl=(dist/111.32)*Math.cos(ang),dln=(dist/(111.32*Math.cos(viewLocation.lat*Math.PI/180)))*Math.sin(ang); var t=txts[Math.floor(Math.random()*txts.length)]; var msgTs = nowSec - Math.floor(Math.random()*86400*7); di.push({id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:viewLocation.lat+dl,lng:viewLocation.lng+dln,range:0,isThread:false,category:cats[Math.floor(Math.random()*cats.length)],title:t.length>20?t.substring(0,20)+'…':t, createdAt:msgTs, messages:[{id:crypto.randomUUID(),text:t,category:cats[Math.floor(Math.random()*cats.length)],author:'Demo_'+(i+1),timestamp:msgTs}]});} di.push({id:crypto.randomUUID(),lat:viewLocation.lat,lng:viewLocation.lng,range:Math.min(5,currentItemMaxKm),isThread:false,category:'subscription',title:'Local Feed 📡',messages:[],allowedTags:allTags,createdAt:nowSec,viewLog:{}}); items=di;saveData();applyFilters();};
     function saveData() { localStorage.setItem('gc_items', JSON.stringify(items)); }
     initTimeSlider(); function initTimeSlider(){ var r=viewTimeH/minTimeH, mr=maxTimeH/minTimeH; document.getElementById('time').value=Math.min(100,Math.max(0,100*(Math.log(r)/Math.log(mr)))); document.getElementById('timeVal').textContent=fmtTime(viewTimeH); }
 
-    // 🔧 MOBILE DRAWER DRAG
+    // 🔧 MOBILE DRAG WITH FIXED HANDLE
     (function() {
       var sheet = document.getElementById('sidebar');
       var handle = document.getElementById('sheetHandle');
@@ -479,15 +487,24 @@
       function snap() {
         if (window.innerWidth > 768) { sheet.style.transform = 'none'; return; }
         var h = window.innerHeight;
+        // 🔧 Clamp to valid states
         if (startTranslate < h * 0.15) state = 'full';
         else if (startTranslate < h * 0.4) state = 'half';
         else state = 'peek';
-        startTranslate = state === 'full' ? 0 : state === 'half' ? h * 0.5 : h * 0.65;
+        // 🔧 Ensure we never go negative (off screen top)
+        startTranslate = Math.max(0, state === 'full' ? 0 : state === 'half' ? h * 0.5 : h * 0.65);
         sheet.classList.remove('dragging');
         sheet.style.transform = `translateY(${startTranslate}px)`;
       }
       function onDragStart(y) { if (window.innerWidth > 768) return; startY = y; isDragging = true; sheet.classList.add('dragging'); }
-      function onDragMove(y) { if (!isDragging) return; startTranslate += (y - startY); startY = y; sheet.style.transform = `translateY(${startTranslate}px)`; }
+      function onDragMove(y) { 
+        if (!isDragging) return; 
+        var diff = y - startY;
+        startY = y;
+        // 🔧 Clamp drag so it doesn't fly off top
+        startTranslate = Math.max(0, startTranslate + diff);
+        sheet.style.transform = `translateY(${startTranslate}px)`;
+      }
       function onDragEnd() { if (isDragging) { isDragging = false; snap(); } }
 
       handle.addEventListener('touchstart', e => onDragStart(e.touches[0].clientY), {passive: true});
@@ -496,7 +513,7 @@
       window.addEventListener('mousemove', e => onDragMove(e.clientY));
       window.addEventListener('touchend', onDragEnd);
       window.addEventListener('mouseup', onDragEnd);
-      handle.addEventListener('click', e => { if(isDragging) return; state = state === 'peek' ? 'half' : state === 'half' ? 'full' : 'peek'; startTranslate = state === 'full' ? 0 : state === 'half' ? window.innerHeight * 0.5 : window.innerHeight * 0.65; snap(); });
+      handle.addEventListener('click', e => { if(isDragging) return; state = state === 'peek' ? 'half' : state === 'half' ? 'full' : 'peek'; startTranslate = Math.max(0, state === 'full' ? 0 : state === 'half' ? window.innerHeight * 0.5 : window.innerHeight * 0.65); snap(); });
       updateTransform();
       window.addEventListener('resize', () => { startTranslate = window.innerWidth > 768 ? 0 : window.innerHeight * 0.65; updateTransform(); });
     })();
