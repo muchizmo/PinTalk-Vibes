@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v77 - SVG Icons & Map Fix</title>
+  <title>GeoChat v78 - Inline Edit & Header Layout</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -32,7 +32,6 @@
     .view-info { font-size: 0.75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .view-info .highlight { color: var(--primary); font-weight: 500; }
     
-    /* 🔧 STYLED BUTTONS FOR SVG ICONS */
     .icon-btn { 
       width: 32px; height: 32px; padding: 0; background: var(--card); border: 1px solid var(--border); border-radius: 50%; 
       cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; 
@@ -112,7 +111,6 @@
     .modal-actions { display: flex; gap: 10px; margin-top: 8px; }
     .modal-actions button { flex: 1; padding: 8px; }
 
-    /* 🔧 MAP ICON STYLES */
     .gc-view-marker { background: transparent !important; border: none !important; width: 30px; height: 30px; text-align: center; cursor: move; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
     .gc-view-marker.pulse { animation: pulse 2s infinite; }
     .gc-msg-icon { background: transparent !important; border: none !important; font-size: 24px; line-height: 1; width: 30px; height: 30px; text-align: center; cursor: grab; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.2)); transition: transform 0.2s; }
@@ -144,15 +142,12 @@
       <div class="drag-handle" id="sheetHandle"></div>
       <div class="sidebar-header">
         <div class="header-left">
-          <!-- Inline SVG for header icon -->
           <h2><span style="display:inline-flex;vertical-align:middle;margin-right:4px;"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#3b82f6"/><circle cx="12" cy="9" r="2.5" fill="#ffffff"/></svg></span> GeoChat</h2>
           <div class="view-info" id="viewLocationInfo">📍 Locating...</div>
         </div>
-        <!-- Custom GPS Icon -->
         <button id="returnBtn" class="icon-btn" title="Return to GPS"></button>
       </div>
       <div class="tabs">
-        <!-- Inline SVG for Tab icon -->
         <button class="tab active" onclick="switchTab('messages')">
           <span style="display:inline-flex;vertical-align:middle;margin-right:4px;"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#3b82f6"/><circle cx="12" cy="9" r="2.5" fill="#ffffff"/></svg></span> 
           NearBy
@@ -221,9 +216,24 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     // 🔧 INJECT CUSTOM SVG ICONS
-    // 1. GPS Icon: Gray circle with white dot
     var gpsSVG = '<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#9ca3af"/><circle cx="12" cy="12" r="3" fill="#ffffff"/></svg>';
     document.getElementById('returnBtn').innerHTML = gpsSVG;
+
+    // 🔧 LONG PRESS / DOUBLE CLICK TIMER
+    var pressTimer;
+    window.startMsgEdit = function(id) { pressTimer = setTimeout(() => editMsgText(id), 800); };
+    window.cancelMsgEdit = function() { clearTimeout(pressTimer); };
+    window.editMsgText = function(id) {
+      clearTimeout(pressTimer);
+      var item = findItem(id);
+      if(item && item.messages.length > 0) {
+        var newText = prompt("Edit message:", item.messages[0].text);
+        if(newText !== null) {
+          item.messages[0].text = newText.trim();
+          saveData(); applyFilters();
+        }
+      }
+    };
 
     var toSec = function(ts) { return ts > 1e12 ? Math.floor(ts / 1000) : ts; };
     var items = JSON.parse(localStorage.getItem('gc_items') || '[]');
@@ -259,24 +269,12 @@
     window.editItem = function(id) {
       var item = findItem(id); if(!item) return;
       var newTitle = prompt("Edit bubble title:", item.title);
-      if(newTitle !== null) {
-        item.title = newTitle.trim();
-        if(item.messages.length > 0) {
-          var newText = prompt("Edit original message:", item.messages[0].text);
-          if(newText !== null) item.messages[0].text = newText.trim();
-        }
-        saveData(); applyFilters();
-      }
+      if(newTitle !== null) { item.title = newTitle.trim(); saveData(); applyFilters(); }
     };
     window.deleteItem = function(id) {
       if(!confirm("Delete this marker and its messages?")) return;
       var idx = items.findIndex(x => x.id === id);
-      if(idx > -1) { 
-        items.splice(idx, 1); 
-        delete rangeEditorsOpen[id]; 
-        if(activeId === id) activeId = null; 
-        saveData(); applyFilters(); 
-      }
+      if(idx > -1) { items.splice(idx, 1); delete rangeEditorsOpen[id]; if(activeId === id) activeId = null; saveData(); applyFilters(); }
     };
 
     function getBubbleInnerHTML(item, isNew) {
@@ -297,7 +295,7 @@
         }
       } else {
         var m = item.messages[0];
-        html += '<div class="msg-entry" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
+        html += '<div class="msg-entry" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgText(\''+item.id+'\')" ontouchstart="startMsgEdit(\''+item.id+'\')" ontouchend="cancelMsgEdit()" onmousedown="startMsgEdit(\''+item.id+'\')" onmouseup="cancelMsgEdit()">'
           + '<p class="msg-text" style="margin-bottom:2px">'+m.text+'</p>'
           + '<div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div></div>';
       }
@@ -309,8 +307,6 @@
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
       if(tab === 'messages') document.querySelector('.tab:first-child').classList.add('active');
       else document.querySelector('.tab.subs').classList.add('active');
-      
-      // 🔧 FIX: Correct visibility handling on load and switch
       var isNearby = (tab === 'messages' && viewLocation.lat !== 0);
       document.getElementById('viewRangeRow').style.display = isNearby ? 'flex' : 'none';
       document.getElementById('spotItBtn').style.display = (tab === 'messages') ? 'inline-flex' : 'none';
@@ -324,21 +320,15 @@
     var selectedRangeCircle = L.circle([0,0], {radius:0, color:'#8b5cf6', fillColor:'#8b5cf6', fillOpacity:0.12, dashArray:'3,3', weight: 2, interactive: false}).addTo(map);
 
     function getMaxKmFromZoom() { return Math.max(0.05, 0.2 * Math.pow(2, 19 - map.getZoom())); }
-    function getMaxItemKmFromZoom() { 
-      var val = 0.8 * Math.pow(2, 19 - map.getZoom());
-      return Math.min(100, Math.max(0.05, val)); 
-    }
+    function getMaxItemKmFromZoom() { var val = 0.8 * Math.pow(2, 19 - map.getZoom()); return Math.min(100, Math.max(0.05, val)); }
 
     function adaptSlidersToZoom() {
       if(viewLocation.lat === 0) return;
-      currentMaxKm = getMaxKmFromZoom(); 
-      currentItemMaxKm = getMaxItemKmFromZoom();
-      
+      currentMaxKm = getMaxKmFromZoom(); currentItemMaxKm = getMaxItemKmFromZoom();
       document.getElementById('sliderMax').textContent = fmtDist(currentMaxKm);
       if(viewRadius > currentMaxKm) { viewRadius = currentMaxKm; radiusCircle.setRadius(viewRadius * 1000); }
       if(viewRadius < minKm) viewRadius = minKm;
       document.getElementById('viewRadius').value = kmToPercent(viewRadius, currentMaxKm);
-      
       items.forEach(function(item) {
         if (rangeEditorsOpen[item.id]) {
           var km = item.range;
@@ -362,10 +352,7 @@
         viewMarker.on('dragend', function(e) { var pos = e.target.getLatLng(); viewLocation.lat = pos.lat; viewLocation.lng = pos.lng; radiusCircle.setLatLng(pos); refreshViewIcon(); updateUI(); applyFilters(); });
       } else { viewMarker.setLatLng([lat, lng]); }
       radiusCircle.setLatLng([lat, lng]);
-      map.setView(viewLocation, 13); 
-      adaptSlidersToZoom();
-      
-      // 🔧 Initialize buttons correctly on load
+      map.setView(viewLocation, 13); adaptSlidersToZoom();
       switchTab('messages');
     }
 
@@ -381,31 +368,17 @@
     } else { document.getElementById('viewLocationInfo').innerHTML = '📍 Geo unsupported.'; }
 
     map.on('click', function(e) { 
-      if(viewLocation.lat === 0) { 
-        initLocation(e.latlng.lat, e.latlng.lng, false); 
-        return; 
-      }
-      setActive(null); 
-      viewLocation.lat = e.latlng.lat; 
-      viewLocation.lng = e.latlng.lng;
+      if(viewLocation.lat === 0) { initLocation(e.latlng.lat, e.latlng.lng, false); return; }
+      setActive(null); viewLocation.lat = e.latlng.lat; viewLocation.lng = e.latlng.lng;
       postTarget = { lat: viewLocation.lat, lng: viewLocation.lng, itemId: null };
-      viewMarker.setLatLng(viewLocation); 
-      radiusCircle.setLatLng(viewLocation); 
-      radiusCircle.setRadius(viewRadius * 1000);
-      refreshViewIcon(); 
-      updateUI(); 
-      applyFilters(); 
+      viewMarker.setLatLng(viewLocation); radiusCircle.setLatLng(viewLocation); radiusCircle.setRadius(viewRadius * 1000);
+      refreshViewIcon(); updateUI(); applyFilters(); 
     });
 
-    map.on('dblclick', function(e) {
-       openModal();
-    });
+    map.on('dblclick', function(e) { openModal(); });
 
     document.getElementById('spotItBtn').addEventListener('click', function() {
-      if(viewLocation.lat === 0) {
-        alert('Please wait for GPS or tap map to set location first');
-        return;
-      }
+      if(viewLocation.lat === 0) { alert('Please wait for GPS or tap map to set location first'); return; }
       openModal();
     });
 
@@ -422,10 +395,7 @@
         }
       }
       activeId = id;
-      if(currentTab !== newTab) {
-        currentTab = newTab;
-        switchTab(newTab);
-      }
+      if(currentTab !== newTab) { currentTab = newTab; switchTab(newTab); }
       selectedRangeCircle.setLatLng([target.lat, target.lng]);
       selectedRangeCircle.setRadius(target.range > 0 ? target.range * 1000 : 0);
       applyFilters();
@@ -443,28 +413,13 @@
     window.setRangeValue = function(id, val) {
       var pct = parseFloat(val); if(isNaN(pct) || pct < 0) pct = 0;
       var item = findItem(id); if(item) {
-        var newKm = percentToKm(pct, currentItemMaxKm); 
-        item.range = Math.round(newKm * 100) / 100; 
-        saveData();
-        
-        var slider = document.getElementById('range-slider-' + id); 
-        if(slider) slider.value = pct;
-        var num = document.getElementById('range-num-' + id); 
-        if(num) num.value = item.range.toFixed(2);
-        var lbl = document.getElementById('range-label-' + id); 
-        if(lbl) lbl.textContent = item.range.toFixed(2) + ' km';
-        
+        var newKm = percentToKm(pct, currentItemMaxKm); item.range = Math.round(newKm * 100) / 100; saveData();
+        var slider = document.getElementById('range-slider-' + id); if(slider) slider.value = pct;
+        var num = document.getElementById('range-num-' + id); if(num) num.value = item.range.toFixed(2);
+        var lbl = document.getElementById('range-label-' + id); if(lbl) lbl.textContent = item.range.toFixed(2) + ' km';
         var r = item.range * 1000;
-        
-        markersLayer.eachLayer(function(layer) { 
-          if(layer instanceof L.Circle && layer.options.itemId === id) {
-            layer.setRadius(r); 
-          } 
-        });
-
-        if(activeId === id) {
-            selectedRangeCircle.setRadius(r);
-        }
+        markersLayer.eachLayer(function(layer) { if(layer instanceof L.Circle && layer.options.itemId === id) layer.setRadius(r); });
+        if(activeId === id) selectedRangeCircle.setRadius(r);
       }
     };
 
@@ -486,83 +441,44 @@
     document.getElementById('time').addEventListener('input', function(e) { viewTimeH = minTimeH * Math.pow(maxTimeH/minTimeH, e.target.value/100); applyFilters(); });
     document.getElementById('categoryFilter').addEventListener('change', applyFilters);
     document.getElementById('showAll').addEventListener('change', function(e) { 
-      if(e.target.checked) { 
-        viewRadius=currentMaxKm; 
-        document.getElementById('viewRadius').value=100; 
-        document.getElementById('radiusVal').textContent='∞'; 
-        radiusCircle.setRadius(200000000); 
-      } else {
-        viewRadius = 5;
-        document.getElementById('viewRadius').value = kmToPercent(viewRadius, currentMaxKm);
-        document.getElementById('radiusVal').textContent = fmtDist(viewRadius);
-        radiusCircle.setRadius(viewRadius * 1000);
-      }
+      if(e.target.checked) { viewRadius=currentMaxKm; document.getElementById('viewRadius').value=100; document.getElementById('radiusVal').textContent='∞'; radiusCircle.setRadius(200000000); } 
+      else { viewRadius = 5; document.getElementById('viewRadius').value = kmToPercent(viewRadius, currentMaxKm); document.getElementById('radiusVal').textContent = fmtDist(viewRadius); radiusCircle.setRadius(viewRadius * 1000); }
       applyFilters(); 
     });
 
     function renderMap(all) {
-      markersLayer.clearLayers();
-      var col = '#f87171';
-
+      markersLayer.clearLayers(); var col = '#f87171';
       all.forEach(item => {
         if(item.category === 'subscription' && item.range > 0 && (!item.isFromBubble || item.id === activeId))
           L.circle([item.lat,item.lng], { radius: item.range*1000, color: col, fillColor: col, fillOpacity: 0.12, weight: 2, dashArray: '5,5', itemId: item.id }).addTo(markersLayer);
       });
-
       all.forEach(item => {
         if(!item.lat || !item.lng || item.isFromBubble) return;
         var s = item.category === 'subscription', act = item.id === activeId, cap = item._isCaptured;
-        
-        // 🔧 Map Markers (Emojis restored)
         var icoMap = { general:'💬', question:'❓', event:'🎉', warning:'⚠️', subscription:'📡' };
         var h = icoMap[item.category] || '📍';
-        
         var c = 'gc-msg-icon' + (s ? ' gc-sub-icon' : '') + (act ? ' active' : '') + (cap ? ' gc-captured' : '');
         var pop = s ? '<b>'+item.title+'</b><br>📏 Range: '+item.range.toFixed(2)+'km' : (item.isThread ? '<b>'+item.title+'</b><br>🎈 '+item.messages.length+' msgs<br>📏 Range: '+item.range.toFixed(2)+'km' : '<b>'+item.author+'</b><br>'+item.messages[0].text);
-
-        var m = L.marker([item.lat, item.lng], {
-          icon: L.divIcon({className:c, html:h, iconSize:[30,30], iconAnchor:[15,30]}),
-          draggable: true
-        }).bindPopup(pop).addTo(markersLayer);
-
+        var m = L.marker([item.lat, item.lng], { icon: L.divIcon({className:c, html:h, iconSize:[30,30], iconAnchor:[15,30]}), draggable: true }).bindPopup(pop).addTo(markersLayer);
         m.on('drag', function(e) {
           if(item.category === 'subscription' && item.range > 0) {
             var newPos = e.target.getLatLng();
-            markersLayer.eachLayer(function(layer) {
-              if(layer instanceof L.Circle && layer.options.itemId === item.id) {
-                layer.setLatLng(newPos);
-              }
-            });
+            markersLayer.eachLayer(function(layer) { if(layer instanceof L.Circle && layer.options.itemId === item.id) layer.setLatLng(newPos); });
           }
         });
-
         m.on('dragend', function(e) {
-          var pos = e.target.getLatLng();
-          var obj = findItem(item.id);
-          if(obj) {
-            obj.lat = pos.lat;
-            obj.lng = pos.lng;
-            saveData();
-            applyFilters();
-          }
+          var pos = e.target.getLatLng(); var obj = findItem(item.id);
+          if(obj) { obj.lat = pos.lat; obj.lng = pos.lng; saveData(); applyFilters(); }
         });
-
-        m.on('click', function(e) {
-          L.DomEvent.stopPropagation(e);
-          setActive(item.id);
-        });
+        m.on('click', function(e) { L.DomEvent.stopPropagation(e); setActive(item.id); });
       });
     }
 
     function renderList(all) {
       var el = document.getElementById('content'); el.innerHTML = '';
       if(!all.length) { 
-        var isNearby = currentTab === 'messages';
-        var msg = isNearby 
-          ? 'No messages in current range.<br><br>💡 <b>Tip:</b> Increase your range slider or check "🌍 Show All" to see more messages.'
-          : 'No subscription bubbles.';
-        el.innerHTML = '<p class="empty">'+msg+'</p>'; 
-        return; 
+        var msg = currentTab === 'messages' ? 'No messages in current range.<br><br>💡 <b>Tip:</b> Increase your range slider or check "🌍 Show All" to see more messages.' : 'No subscription bubbles.';
+        el.innerHTML = '<p class="empty">'+msg+'</p>'; return; 
       }
       all.forEach(item => {
         var s = item.category==='subscription'; var card = document.createElement('div');
@@ -572,7 +488,12 @@
         var bt = s?(item.isFromBubble?'🎈 Bubble':'📡 Subscription'):(cm[item.category]||'💬 Message')+(item.isThread?' Thread':'');
         var h = '<div class="msg-header"><span class="category-badge '+(s?'subscription':item.category)+'">'+bt+'</span><span class="distance">📏 '+d+'</span></div>';
         if(s) {
-          h += '<p class="msg-text" style="font-weight:500">'+item.title+'</p>';
+          // 🔧 TITLE + SUB BUTTON ON SAME LINE
+          h += '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin:4px 0;">';
+          h += '<p class="msg-text" style="font-weight:500; margin:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+item.title+'</p>';
+          h += '<button class="action-btn" style="margin:0; flex-shrink:0;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>';
+          h += '</div>';
+          
           if(item.id===activeId) {
             var rc = item.isFromBubble?'<button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">📥 Locked</span>':'<button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️</button><button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">📥 '+item.capturedCount+'</span>';
             h += '<div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;">'+rc+'</div>';
@@ -593,8 +514,12 @@
           else if(item.id===activeId && !item.isFromBubble) h += '<div style="padding:8px;text-align:center;color:var(--muted);font-size:0.8rem">No messages.</div>';
         } else {
           if(item.isThread) {
-            h += '<p class="msg-text" style="font-weight:500">'+item.title+'</p>';
-            h += '<button class="action-btn" style="margin-top:4px;margin-right:4px;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>';
+            // 🔧 TITLE + SUB BUTTON ON SAME LINE
+            h += '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin:4px 0;">';
+            h += '<p class="msg-text" style="font-weight:500; margin:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+item.title+'</p>';
+            h += '<button class="action-btn" style="margin:0; flex-shrink:0;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>';
+            h += '</div>';
+            
             if(item.id===activeId) { 
               h += '<div style="display:flex;gap:4px;margin:6px 0;flex-wrap:wrap;">'
                 + '<button class="action-btn" onclick="event.stopPropagation();editItem(\''+item.id+'\')">✏️ Edit</button>'
@@ -609,21 +534,17 @@
                   + '<input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\',kmToPercent(this.value,currentItemMaxKm));applyFilters()">'
                   + '</div></div>'; 
               }
-            } else {
-              h += '<div style="font-size:0.7rem;color:var(--muted);margin:4px 0">💬 '+item.messages.length+' msgs</div>';
-            }
+            } else { h += '<div style="font-size:0.7rem;color:var(--muted);margin:4px 0">💬 '+item.messages.length+' msgs</div>'; }
             if(item.messages) item.messages.forEach((m,j)=>{ h+='<div class="sub-item'+(j===0?' original':'')+'" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')">'+(j===0?'<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">📍 Original</div>':'')+'<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+m.text+'</div>'; });
           } else { 
             var m = item.messages[0]; 
-            h+='<div class="msg-entry" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')"><p class="msg-text" style="margin-bottom:2px">'+m.text+'</p><div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div></div>';
+            h+='<div class="msg-entry" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgText(\''+item.id+'\')" ontouchstart="startMsgEdit(\''+item.id+'\')" ontouchend="cancelMsgEdit()" onmousedown="startMsgEdit(\''+item.id+'\')" onmouseup="cancelMsgEdit()"><p class="msg-text" style="margin-bottom:2px">'+m.text+'</p><div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div></div>';
             if(item.id === activeId) {
               h += '<div style="display:flex;gap:4px;margin:6px 0;">'
                 + '<button class="action-btn" onclick="event.stopPropagation();editItem(\''+item.id+'\')">✏️ Edit</button>'
                 + '<button class="action-btn danger" onclick="event.stopPropagation();deleteItem(\''+item.id+'\')">🗑️ Delete</button>'
                 + '<button class="action-btn" style="margin-left:auto;" onclick="event.stopPropagation();turnIntoBubble(\''+item.id+'\')">🎈 Bubble</button></div>';
-            } else {
-              h += '<button class="action-btn" style="margin-top:4px;" onclick="event.stopPropagation();turnIntoBubble(\''+item.id+'\')">🎈 Bubble</button>'; 
-            }
+            } else { h += '<button class="action-btn" style="margin-top:4px;" onclick="event.stopPropagation();turnIntoBubble(\''+item.id+'\')">🎈 Bubble</button>'; }
           }
         }
         card.innerHTML = h; card.onclick = e => { if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.closest('.range-editor')||e.target.closest('.sub-item')||e.target.closest('.msg-entry')) return; setActive(item.id); }; el.appendChild(card);
@@ -632,8 +553,7 @@
 
     function applyFilters() {
       var sa = document.getElementById('showAll').checked, cat = document.getElementById('categoryFilter').value;
-      var ur = sa ? Infinity : viewRadius; 
-      document.getElementById('radiusVal').textContent = sa ? '∞' : fmtDist(ur);
+      var ur = sa ? Infinity : viewRadius; document.getElementById('radiusVal').textContent = sa ? '∞' : fmtDist(ur);
       document.getElementById('timeVal').textContent = fmtTime(viewTimeH);
       var now = toSec(Date.now()), cut = now - (viewTimeH * 3600);
       var capIds = new Set(), subs = [], msgs = [], mapMsgs = [];
@@ -644,14 +564,9 @@
         var d=getDist(viewLocation,it); 
         if(it.isFromBubble && it.sourceBubbleId){ var sb=findItem(it.sourceBubbleId); if(sb)it._bubbleContent=sb; } 
         else { 
-          var cg={}; 
-          items.forEach(sc=>{ 
-            if(sc.id===it.id||sc.category==='subscription')return; var ds=getDist(it,sc); 
-            if(ds<=it.range){ 
-              var v=[]; sc.messages.forEach(m=>{ m.timestamp=toSec(m.timestamp); if(m.timestamp>=cut){ if(!it.viewLog[sc.id])it.viewLog[sc.id]=now; var isNew=(toSec(sc.createdAt)>=it.createdAt)&&(now-it.viewLog[sc.id]<86400); m.isNew=isNew; var tags=it.allowedTags||[],isCatMatch=tags.length===0||tags.includes(m.category); if(isCatMatch && (!tags.includes('new')||isNew)){v.push(m);capIds.add(sc.id);} }}); 
-              if(v.length){v.sort((a,b)=>b.timestamp-a.timestamp);cg[sc.id]={sourceId:sc.id,sourceTitle:sc.title,distance:ds,messages:v};} 
-            } 
-          }); var ga=Object.values(cg).sort((a,b)=>a.distance-b.distance); var tc=0; ga.forEach(g=>tc+=g.messages.length); it.capturedGroups=ga; it.capturedCount=tc; 
+          var cg={}; items.forEach(sc=>{ 
+            if(sc.id===it.id||sc.category==='subscription')return; var ds=getDist(it,sc); if(ds<=it.range){ var v=[]; sc.messages.forEach(m=>{ m.timestamp=toSec(m.timestamp); if(m.timestamp>=cut){ if(!it.viewLog[sc.id])it.viewLog[sc.id]=now; var isNew=(toSec(sc.createdAt)>=it.createdAt)&&(now-it.viewLog[sc.id]<86400); m.isNew=isNew; var tags=it.allowedTags||[],isCatMatch=tags.length===0||tags.includes(m.category); if(isCatMatch && (!tags.includes('new')||isNew)){v.push(m);capIds.add(sc.id);} }}); if(v.length){v.sort((a,b)=>b.timestamp-a.timestamp);cg[sc.id]={sourceId:sc.id,sourceTitle:sc.title,distance:ds,messages:v};} } }); 
+          var ga=Object.values(cg).sort((a,b)=>a.distance-b.distance); var tc=0; ga.forEach(g=>tc+=g.messages.length); it.capturedGroups=ga; it.capturedCount=tc; 
         } subs.push(Object.assign({},it,{_dist:d})); 
       });
 
@@ -662,24 +577,27 @@
     function updateUI() { var isR = realLocation && getDist(viewLocation, realLocation)<0.1; document.getElementById('viewLocationInfo').innerHTML = isR ? '📍 <span class="highlight">GPS</span>' : '👁️ <span class="highlight">'+(viewLocation.lat !== 0 ? viewLocation.lat.toFixed(4)+', '+viewLocation.lng.toFixed(4):'Tap map')+'</span>'; document.getElementById('returnBtn').style.display = isR && viewLocation.lat !== 0 ? 'none' : (realLocation ? 'flex' : 'none'); }
     document.getElementById('returnBtn').onclick = () => { if(realLocation){ viewLocation={...realLocation}; viewMarker.setLatLng(viewLocation); radiusCircle.setLatLng(viewLocation); radiusCircle.setRadius(viewRadius*1000); refreshViewIcon(); updateUI(); applyFilters(); map.panTo(viewLocation,{animate:true}); }};
     document.getElementById('cancelBtn').onclick = () => document.getElementById('addModal').classList.add('hidden');
-    document.getElementById('submitBtn').onclick = () => { var t=document.getElementById('msgText').value.trim(); if(!t)return alert('Enter text'); var c=document.getElementById('msgCategory').value; var nm={id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:postTarget.lat,lng:postTarget.lng,text:t,category:c,author:'User_'+Math.floor(Math.random()*9000+1000),timestamp:toSec(Date.now())}; if(postTarget.itemId){ var i=findItem(postTarget.itemId); if(i&&i.category!=='subscription'){i.messages.push(nm);i.title=i.messages[0].text.length>20?i.messages[0].text.substring(0,20)+'…':i.messages[0].text;}} else items.push({id:nm.id,lat:nm.lat,lng:nm.lng,range:c==='subscription'?viewRadius:0,isThread:false,category:c,title:t.length>20?t.substring(0,20)+'…':t,messages:c==='subscription'?[]:[nm], createdAt:nm.timestamp}); document.getElementById('addModal').classList.add('hidden');document.getElementById('msgText').value='';postTarget={lat:null,lng:null,itemId:null};saveData();applyFilters();};
-    document.getElementById('demoBtn').onclick = () => { if(items.length>10 && !confirm('Replace data?'))return; var cats=['general','question','event','warning'], txts=['Coffee ☕','Open?','Event 🎵','Alert ⚠️','View 🌅','Walk?','Traffic 🚗','Shop 🛍️','Dog 🐕','Music ']; var di=[]; var nowSec = toSec(Date.now()); for(var i=0;i<12;i++){var dist=[0.1,0.5,2,10,30][Math.floor(Math.random()*5)],ang=Math.random()*Math.PI*2; var dl=(dist/111.32)*Math.cos(ang),dln=(dist/(111.32*Math.cos(viewLocation.lat*Math.PI/180)))*Math.sin(ang); var t=txts[Math.floor(Math.random()*txts.length)]; var msgTs = nowSec - Math.floor(Math.random()*86400*7); di.push({id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:viewLocation.lat+dl,lng:viewLocation.lng+dln,range:0,isThread:false,category:cats[Math.floor(Math.random()*cats.length)],title:t.length>20?t.substring(0,20)+'…':t, createdAt:msgTs, messages:[{id:crypto.randomUUID(),text:t,category:cats[Math.floor(Math.random()*cats.length)],author:'Demo_'+(i+1),timestamp:msgTs}]});} di.push({id:crypto.randomUUID(),lat:viewLocation.lat,lng:viewLocation.lng,range:Math.min(5,currentItemMaxKm),isThread:false,category:'subscription',title:'Local Feed 📡',messages:[],allowedTags:allTags,createdAt:nowSec,viewLog:{}}); items=di;saveData();applyFilters();};
+    document.getElementById('submitBtn').onclick = () => { 
+      var t=document.getElementById('msgText').value.trim(); if(!t)return alert('Enter text'); 
+      var c=document.getElementById('msgCategory').value; 
+      var nm={id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:postTarget.lat,lng:postTarget.lng,text:t,category:c,author:'User_'+Math.floor(Math.random()*9000+1000),timestamp:toSec(Date.now())}; 
+      if(postTarget.itemId){ var i=findItem(postTarget.itemId); if(i&&i.category!=='subscription'){i.messages.push(nm);i.title=t;}} 
+      else { 
+        // 🔧 NO MORE TRUNCATION: full title used
+        items.push({id:nm.id,lat:nm.lat,lng:nm.lng,range:c==='subscription'?viewRadius:0,isThread:false,category:c,title:t,messages:c==='subscription'?[]:[nm], createdAt:nm.timestamp}); 
+      } 
+      document.getElementById('addModal').classList.add('hidden');document.getElementById('msgText').value='';postTarget={lat:null,lng:null,itemId:null};saveData();applyFilters();
+    };
+    document.getElementById('demoBtn').onclick = () => { if(items.length>10 && !confirm('Replace data?'))return; var cats=['general','question','event','warning'], txts=['Coffee ☕','Open?','Event 🎵','Alert ⚠️','View 🌅','Walk?','Traffic 🚗','Shop 🛍️','Dog 🐕','Music ']; var di=[]; var nowSec = toSec(Date.now()); for(var i=0;i<12;i++){var dist=[0.1,0.5,2,10,30][Math.floor(Math.random()*5)],ang=Math.random()*Math.PI*2; var dl=(dist/111.32)*Math.cos(ang),dln=(dist/(111.32*Math.cos(viewLocation.lat*Math.PI/180)))*Math.sin(ang); var t=txts[Math.floor(Math.random()*txts.length)]; var msgTs = nowSec - Math.floor(Math.random()*86400*7); di.push({id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:viewLocation.lat+dl,lng:viewLocation.lng+dln,range:0,isThread:false,category:cats[Math.floor(Math.random()*cats.length)],title:t, createdAt:msgTs, messages:[{id:crypto.randomUUID(),text:t,category:cats[Math.floor(Math.random()*cats.length)],author:'Demo_'+(i+1),timestamp:msgTs}]});} di.push({id:crypto.randomUUID(),lat:viewLocation.lat,lng:viewLocation.lng,range:Math.min(5,currentItemMaxKm),isThread:false,category:'subscription',title:'Local Feed 📡',messages:[],allowedTags:allTags,createdAt:nowSec,viewLog:{}}); items=di;saveData();applyFilters();};
     function saveData() { localStorage.setItem('gc_items', JSON.stringify(items)); }
     initTimeSlider(); function initTimeSlider(){ var r=viewTimeH/minTimeH, mr=maxTimeH/minTimeH; document.getElementById('time').value=Math.min(100,Math.max(0,100*(Math.log(r)/Math.log(mr)))); document.getElementById('timeVal').textContent=fmtTime(viewTimeH); }
 
     (function() {
-      var sheet = document.getElementById('sidebar');
-      var handle = document.getElementById('sheetHandle');
+      var sheet = document.getElementById('sidebar'); var handle = document.getElementById('sheetHandle');
       var isDragging = false, startY = 0, currentTranslate = window.innerHeight * 0.65;
       sheet.style.transform = `translateY(${currentTranslate}px)`;
       function onDragStart(y) { isDragging = true; startY = y; sheet.style.transition = 'none'; }
-      function onDragMove(y, e) { 
-        if (!isDragging) return; if(e) e.preventDefault(); 
-        var delta = y - startY; currentTranslate += delta; startY = y;
-        var maxT = window.innerHeight * 0.9;
-        if (currentTranslate < 0) currentTranslate = 0; if (currentTranslate > maxT) currentTranslate = maxT;
-        sheet.style.transform = `translateY(${currentTranslate}px)`;
-      }
+      function onDragMove(y, e) { if (!isDragging) return; if(e) e.preventDefault(); var delta = y - startY; currentTranslate += delta; startY = y; var maxT = window.innerHeight * 0.9; if (currentTranslate < 0) currentTranslate = 0; if (currentTranslate > maxT) currentTranslate = maxT; sheet.style.transform = `translateY(${currentTranslate}px)`; }
       function onDragEnd() { isDragging = false; sheet.style.transition = 'transform 0.2s ease-out'; }
       handle.addEventListener('touchstart', e => onDragStart(e.touches[0].clientY), {passive: true});
       handle.addEventListener('mousedown', e => onDragStart(e.clientY));
