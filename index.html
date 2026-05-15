@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v84 - Clean Single-Message UI & Smart Sub Button</title>
+  <title>GeoChat v85 - Unified UI & Smart Subs</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -304,39 +304,32 @@
     window.toggleSubTag = function(subId, tag) { var sub = findItem(subId); if(!sub || !sub.allowedTags) return; var idx = sub.allowedTags.indexOf(tag); if(idx > -1) sub.allowedTags.splice(idx, 1); else sub.allowedTags.push(tag); saveData(); applyFilters(); };
     window.editItem = function(id) { var item = findItem(id); if(!item) return; var newTitle = prompt("Edit title:", item.title); if(newTitle !== null) { item.title = sanitize(newTitle.trim()); saveData(); applyFilters(); } };
     window.deleteItem = function(id) { if(!confirm("Delete this marker and its messages?")) return; var idx = items.findIndex(x => x.id === id); if(idx > -1) { items.splice(idx, 1); delete rangeEditorsOpen[id]; if(activeId === id) activeId = null; saveData(); applyFilters(); } };
-
-    // 🔧 FIX 1: Smart rendering - title & thread UI only for >1 message
-    function getBubbleInnerHTML(item, isNew) {
-      var html = '', dist = item._dist !== undefined ? fmtDist(item._dist) : fmtDist(getDist(viewLocation, item));
-      var catMap = { general: '💬 General', question: '❓ Question', event: '🎉 Event', warning: '⚠️ Warning' };
-      var badgeHtml = '<span class="category-badge '+item.category+'">'+(catMap[item.category] || '💬 Message')+'</span>';
-      if(isNew) badgeHtml = '<span class="category-badge new">✨ New</span> ' + badgeHtml;
-      html += '<div class="msg-header">'+badgeHtml+'<span class="distance">📏 '+dist+'</span></div>';
-
-      if (item.messages.length > 1) {
-        html += '<p class="msg-text" style="font-weight:500">'+sanitize(item.title)+'</p>';
-        for(var j=0; j<item.messages.length; j++) {
-          var m = item.messages[j], isOrig = j === 0;
-          html += '<div class="sub-item '+(isOrig?'original':'')+'" id="msg-'+item.id+'-'+j+'" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgDblClick(\''+item.id+'\','+j+',event)" ontouchstart="startMsgEdit(\''+item.id+'\','+j+',event)" ontouchend="cancelMsgEdit(event)" onmousedown="startMsgEdit(\''+item.id+'\','+j+',event)" onmouseup="cancelMsgEdit(event)">'+
-            (isOrig ? '<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">Original</div>' : '')+
-            '<div class="meta">👤 '+sanitize(m.author)+' · '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+sanitize(m.text)+
-            '<div class="msg-controls" id="controls-'+item.id+'-'+j+'" onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">'+
-              '<button class="mini-btn" onclick="event.stopPropagation(); doEditMessage(\''+item.id+'\','+j+',event)">✏️ Edit</button>'+
-              '<button class="mini-btn danger" onclick="event.stopPropagation(); doDeleteMessage(\''+item.id+'\','+j+',event)">🗑️ Delete</button></div></div>';
-        }
-      } else if (item.messages.length === 1) {
-        var m = item.messages[0];
-        html += '<div class="msg-entry" id="msg-'+item.id+'-0" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgDblClick(\''+item.id+'\','+0+',event)" ontouchstart="startMsgEdit(\''+item.id+'\','+0+',event)" ontouchend="cancelMsgEdit(event)" onmousedown="startMsgEdit(\''+item.id+'\','+0+',event)" onmouseup="cancelMsgEdit(event)">'+
-          '<p class="msg-text" style="margin-bottom:2px">'+sanitize(m.text)+'</p>'+
-          '<div class="meta">👤 '+sanitize(m.author)+' · 🕒 '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+
-          '<div class="msg-controls" id="controls-'+item.id+'-0" onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">'+
-            '<button class="mini-btn" onclick="event.stopPropagation(); doEditMessage(\''+item.id+'\','+0+',event)">✏️ Edit</button>'+
-            '<button class="mini-btn danger" onclick="event.stopPropagation(); doDeleteMessage(\''+item.id+'\','+0+',event)">🗑️ Delete</button></div></div>';
-      } else {
-        html += '<div style="padding:8px;text-align:center;color:var(--muted);font-size:0.8rem">No messages.</div>';
+    window.toggleRangeEditor = function(id) { rangeEditorsOpen[id] = !rangeEditorsOpen[id]; applyFilters(); };
+    window.setRangeValue = function(id, val) {
+      var pct = parseFloat(val); if(isNaN(pct) || pct < 0) pct = 0;
+      var item = findItem(id); if(item) {
+        var newKm = percentToKm(pct, currentItemMaxKm); item.range = Math.round(newKm * 100) / 100; saveData();
+        var slider = document.getElementById('range-slider-' + id); if(slider) slider.value = pct;
+        var num = document.getElementById('range-num-' + id); if(num) num.value = item.range.toFixed(2);
+        var lbl = document.getElementById('range-label-' + id); if(lbl) lbl.textContent = item.range.toFixed(2) + ' km';
+        var r = item.range * 1000;
+        markersLayer.eachLayer(function(layer) { if(layer instanceof L.Circle && layer.options.itemId === id) layer.setRadius(r); });
+        if(activeId === id) selectedRangeCircle.setRadius(r);
       }
-      return html;
-    }
+    };
+    window.applyRangeChange = function(id) { applyFilters(); };
+    window.subscribeToBubble = function(id) {
+      var item = findItem(id); if(!item) return;
+      items.push({ id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), lat: item.lat, lng: item.lng, range: item.range, category: 'subscription', title: sanitize(item.title), messages: [], isFromBubble: true, sourceBubbleId: id, allowedTags: allTags, createdAt: toSec(Date.now()), viewLog: {} });
+      saveData(); switchTab('subscriptions'); applyFilters();
+    };
+    window.editSubscription = function(id) { var i = findItem(id); if(!i) return; var t = prompt("Edit title:", i.title); if(t && t.trim()) { i.title = sanitize(t.trim()); saveData(); applyFilters(); } };
+    window.deleteSubscription = function(id) { if(!confirm("Delete?")) return; var idx = items.findIndex(x => x.id === id); if(idx > -1) { items.splice(idx, 1); delete rangeEditorsOpen[id]; saveData(); applyFilters(); } };
+    window.openModal = function(itemId) {
+      var m = document.getElementById('addModal'), t = document.getElementById('modalTitle');
+      if(itemId) { var i = findItem(itemId); t.textContent = '➕ Add to Thread: ' + (i?sanitize(i.title):''); postTarget = { lat: i.lat, lng: i.lng, itemId: itemId }; }
+      else t.textContent = '📝 Leave a Message'; m.classList.remove('hidden');
+    };
 
     window.switchTab = function(tab) {
       currentTab = tab;
@@ -435,63 +428,37 @@
     };
 
     window.centerMapOnItem = function(id) { setActive(id); };
-    window.toggleRangeEditor = function(id) { rangeEditorsOpen[id] = !rangeEditorsOpen[id]; applyFilters(); };
-    window.setRangeValue = function(id, val) {
-      var pct = parseFloat(val); if(isNaN(pct) || pct < 0) pct = 0;
-      var item = findItem(id); if(item) {
-        var newKm = percentToKm(pct, currentItemMaxKm); item.range = Math.round(newKm * 100) / 100; saveData();
-        var slider = document.getElementById('range-slider-' + id); if(slider) slider.value = pct;
-        var num = document.getElementById('range-num-' + id); if(num) num.value = item.range.toFixed(2);
-        var lbl = document.getElementById('range-label-' + id); if(lbl) lbl.textContent = item.range.toFixed(2) + ' km';
-        var r = item.range * 1000;
-        markersLayer.eachLayer(function(layer) { if(layer instanceof L.Circle && layer.options.itemId === id) layer.setRadius(r); });
-        if(activeId === id) selectedRangeCircle.setRadius(r);
+
+    // 🔧 UNIFIED HELPER: Renders messages exactly the same for NearBy and Subs tabs
+    function renderMessageContent(item, isNew) {
+      var h = '';
+      var msgCount = item.messages.length;
+      if (msgCount > 1) {
+        h += '<p class="msg-text" style="font-weight:500;margin:4px 0">'+sanitize(item.title)+'</p>';
+        for(var j=0; j<msgCount; j++) {
+          var m = item.messages[j], isOrig = j === 0;
+          h += '<div class="sub-item '+(isOrig?'original':'')+'" id="msg-'+item.id+'-'+j+'" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgDblClick(\''+item.id+'\','+j+',event)" ontouchstart="startMsgEdit(\''+item.id+'\','+j+',event)" ontouchend="cancelMsgEdit(event)" onmousedown="startMsgEdit(\''+item.id+'\','+j+',event)" onmouseup="cancelMsgEdit(event)">'+
+            (isOrig ? '<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">Original</div>' : '')+
+            '<div class="meta">👤 '+sanitize(m.author)+' · '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+sanitize(m.text)+
+            '<div class="msg-controls" id="controls-'+item.id+'-'+j+'" onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">'+
+              '<button class="mini-btn" onclick="event.stopPropagation(); doEditMessage(\''+item.id+'\','+j+',event)">✏️ Edit</button>'+
+              '<button class="mini-btn danger" onclick="event.stopPropagation(); doDeleteMessage(\''+item.id+'\','+j+',event)">🗑️ Delete</button></div></div>';
+        }
+      } else if (msgCount === 1) {
+        var m = item.messages[0];
+        h += '<div class="msg-entry" id="msg-'+item.id+'-0" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgDblClick(\''+item.id+'\','+0+',event)" ontouchstart="startMsgEdit(\''+item.id+'\','+0+',event)" ontouchend="cancelMsgEdit(event)" onmousedown="startMsgEdit(\''+item.id+'\','+0+',event)" onmouseup="cancelMsgEdit(event)">'+
+          '<p class="msg-text" style="margin-bottom:2px">'+sanitize(m.text)+'</p>'+
+          '<div class="meta">👤 '+sanitize(m.author)+' · 🕒 '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+
+          '<div class="msg-controls" id="controls-'+item.id+'-0" onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">'+
+            '<button class="mini-btn" onclick="event.stopPropagation(); doEditMessage(\''+item.id+'\','+0+',event)">✏️ Edit</button>'+
+            '<button class="mini-btn danger" onclick="event.stopPropagation(); doDeleteMessage(\''+item.id+'\','+0+',event)">🗑️ Delete</button></div></div>';
+      } else {
+        h += '<div style="padding:8px;text-align:center;color:var(--muted);font-size:0.8rem">No messages.</div>';
       }
-    };
-    window.applyRangeChange = function(id) { applyFilters(); };
-    window.subscribeToBubble = function(id) {
-      var item = findItem(id); if(!item) return;
-      items.push({ id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), lat: item.lat, lng: item.lng, range: item.range, category: 'subscription', title: sanitize(item.title), messages: [], isFromBubble: true, sourceBubbleId: id, allowedTags: allTags, createdAt: toSec(Date.now()), viewLog: {} });
-      saveData(); switchTab('subscriptions'); applyFilters();
-    };
-    window.editSubscription = function(id) { var i = findItem(id); if(!i) return; var t = prompt("Edit title:", i.title); if(t && t.trim()) { i.title = sanitize(t.trim()); saveData(); applyFilters(); } };
-    window.deleteSubscription = function(id) { if(!confirm("Delete?")) return; var idx = items.findIndex(x => x.id === id); if(idx > -1) { items.splice(idx, 1); delete rangeEditorsOpen[id]; saveData(); applyFilters(); } };
-    window.openModal = function(itemId) {
-      var m = document.getElementById('addModal'), t = document.getElementById('modalTitle');
-      if(itemId) { var i = findItem(itemId); t.textContent = '➕ Add to Thread: ' + (i?sanitize(i.title):''); postTarget = { lat: i.lat, lng: i.lng, itemId: itemId }; }
-      else t.textContent = '📝 Leave a Message'; m.classList.remove('hidden');
-    };
-
-    document.getElementById('viewRadius').addEventListener('input', function(e) { viewRadius = percentToKm(parseFloat(e.target.value), currentMaxKm); document.getElementById('radiusVal').textContent = fmtDist(viewRadius); radiusCircle.setRadius(viewRadius * 1000); if(!document.getElementById('showAll').checked) applyFilters(); });
-    document.getElementById('time').addEventListener('input', function(e) { viewTimeH = minTimeH * Math.pow(maxTimeH/minTimeH, e.target.value/100); applyFilters(); });
-    document.getElementById('categoryFilter').addEventListener('change', applyFilters);
-    document.getElementById('showAll').addEventListener('change', function(e) { 
-      if(e.target.checked) { viewRadius=currentMaxKm; document.getElementById('viewRadius').value=100; document.getElementById('radiusVal').textContent='∞'; radiusCircle.setRadius(200000000); } 
-      else { viewRadius = 5; document.getElementById('viewRadius').value = kmToPercent(viewRadius, currentMaxKm); document.getElementById('radiusVal').textContent = fmtDist(viewRadius); radiusCircle.setRadius(viewRadius * 1000); }
-      applyFilters(); 
-    });
-
-    function renderMap(all) {
-      markersLayer.clearLayers(); var col = '#f87171';
-      all.forEach(item => {
-        if(item.category === 'subscription' && item.range > 0 && (!item.isFromBubble || item.id === activeId))
-          L.circle([item.lat,item.lng], { radius: item.range*1000, color: col, fillColor: col, fillOpacity: 0.12, weight: 2, dashArray: '5,5', itemId: item.id }).addTo(markersLayer);
-      });
-      var icoMap = { general:'💬', question:'❓', event:'🎉', warning:'⚠️', subscription:'📡' };
-      all.forEach(item => {
-        if(!item.lat || !item.lng || item.isFromBubble) return;
-        var s = item.category === 'subscription', act = item.id === activeId, cap = item._isCaptured;
-        var h = icoMap[item.category] || '💬';
-        var c = 'gc-msg-icon' + (s ? ' gc-sub-icon' : '') + (act ? ' active' : '') + (cap ? ' gc-captured' : '');
-        var pop = s ? '<b>'+sanitize(item.title)+'</b><br>📏 Range: '+item.range.toFixed(2)+'km' : '<b>'+sanitize(item.title)+'</b><br>💬 '+item.messages.length+' msgs';
-        var m = L.marker([item.lat, item.lng], { icon: L.divIcon({className:c, html:h, iconSize:[30,30], iconAnchor:[15,30]}), draggable: true }).bindPopup(pop).addTo(markersLayer);
-        m.on('drag', function(e) { if(item.category === 'subscription' && item.range > 0) { var newPos = e.target.getLatLng(); markersLayer.eachLayer(function(layer) { if(layer instanceof L.Circle && layer.options.itemId === item.id) layer.setLatLng(newPos); }); } });
-        m.on('dragend', function(e) { var pos = e.target.getLatLng(); var obj = findItem(item.id); if(obj) { obj.lat = pos.lat; obj.lng = pos.lng; saveData(); applyFilters(); } });
-        m.on('click', function(e) { L.DomEvent.stopPropagation(e); setActive(item.id); });
-      });
+      return h;
     }
 
-    // 🔧 FIX 1 & 2: Unified clean rendering with conditional title/count & hidden Sub button
+    // 🔧 UNIFIED RENDER LIST
     function renderList(all) {
       var el = document.getElementById('content'); el.innerHTML = '';
       if(!all.length) { 
@@ -499,82 +466,64 @@
         el.innerHTML = '<p class="empty">'+msg+'</p>'; return; 
       }
       all.forEach(item => {
-        var s = item.category==='subscription'; var card = document.createElement('div');
+        var s = item.category === 'subscription';
+        var card = document.createElement('div');
         card.className = 'card'+(s?(item.isFromBubble?' subscription bubble-sub':' subscription'):'');
         card.dataset.id = item.id; if(item.id === activeId) card.classList.add('active');
-        var d = fmtDist(item._dist); var cm = {general:'💬 General',question:'❓ Question',event:'🎉 Event',warning:'⚠️ Warning'};
+        
+        var d = fmtDist(item._dist);
+        var cm = {general:'💬 General',question:'❓ Question',event:'🎉 Event',warning:'⚠️ Warning'};
         var bt = s?(item.isFromBubble?'🎈 Bubble':'📡 Subscription'):(cm[item.category]||'💬 Message');
         var h = '<div class="msg-header"><span class="category-badge '+(s?'subscription':item.category)+'">'+bt+'</span><span class="distance">📏 '+d+'</span></div>';
-        
-        var msgCount = item.messages.length;
-        var isMulti = msgCount > 1;
 
-        if(s) {
-          h += '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin:4px 0;">';
-          h += '<p class="msg-text" style="font-weight:500; margin:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+sanitize(item.title)+'</p>';
-          if (currentTab === 'subscriptions') h += '<span style="font-size:0.75rem; color:var(--muted); margin-left:auto; white-space:nowrap; flex-shrink:0;">📥 '+(item.capturedCount||0)+' msgs</span>';
-          h += '</div>';
-          if(item.id===activeId) {
-            var rc = item.isFromBubble?'<button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">📥 Locked</span>':'<button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️</button><button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️</button>';
+        // 🔧 Active State Toolbar (Unified)
+        if(item.id === activeId) {
+          if(!s) {
+            // NearBy Controls: Sub button now works for single & multi
+            h += '<div style="display:flex;gap:4px;margin:6px 0;flex-wrap:wrap;">'
+              + '<button class="action-btn" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>'
+              + '<button class="action-btn" onclick="event.stopPropagation();editItem(\''+item.id+'\')">✏️</button>'
+              + '<button class="action-btn danger" onclick="event.stopPropagation();deleteItem(\''+item.id+'\')">🗑️</button>'
+              + '<button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️</button>'
+              + '<button class="action-btn" onclick="event.stopPropagation();openModal(\''+item.id+'\')">➕</button>'
+              + '<span style="font-size:0.7rem;color:var(--muted);align-self:center;margin-left:auto">💬 '+item.messages.length+'</span></div>';
+          } else {
+            // Subscription Controls
+            var rc = item.isFromBubble?'<button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">📥 Locked</span>':'<button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️</button><button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️</button><span style="font-size:0.7rem;color:var(--muted);align-self:center;margin-left:auto">📥 '+(item.capturedCount||0)+' msgs</span>';
             h += '<div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;">'+rc+'</div>';
+          }
+          if(rangeEditorsOpen[item.id] && !item.isFromBubble) {
+            var pct = kmToPercent(item.range, currentItemMaxKm);
+            h += '<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group">'
+              + '<input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)" onchange="applyFilters()">'
+              + '<input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\',kmToPercent(this.value,currentItemMaxKm));applyFilters()">'
+              + '</div></div>';
+          }
+          if(s && !item.isFromBubble) {
             var tags = item.allowedTags || []; var tagIcons = {general:'💬',question:'❓',event:'🎉',warning:'⚠️',new:'✨'};
             h += '<div style="margin-top:4px;padding:4px 6px;background:#f9fafb;border-radius:6px;font-size:0.7rem;"><div style="margin-bottom:2px;font-weight:500;color:var(--muted);">🎛️ Filters:</div><div style="display:flex;gap:6px;flex-wrap:wrap;">';
             allTags.forEach(t => { var chk = tags.includes(t) ? 'checked' : ''; h += '<label style="cursor:pointer;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--card);"><input type="checkbox" '+chk+' onclick="event.stopPropagation();window.toggleSubTag(\''+item.id+'\',\''+t+'\')"> '+tagIcons[t]+t.charAt(0).toUpperCase() + t.slice(1)+'</label>'; });
             h += '</div></div>';
-            if(rangeEditorsOpen[item.id] && !item.isFromBubble) { 
-              var pct = kmToPercent(item.range, currentItemMaxKm); 
-              h += '<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group">'
-                + '<input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)" onchange="applyFilters()">'
-                + '<input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\',kmToPercent(this.value,currentItemMaxKm));applyFilters()">'
-                + '</div></div>'; 
-            }
-          }
-          if(item.isFromBubble && item._bubbleContent) { h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">'+getBubbleInnerHTML(item._bubbleContent, false)+'</div>'; }
-          else if(item.capturedGroups) { h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px;">'; item.capturedGroups.forEach((g,gi) => { h += getBubbleInnerHTML({id:g.sourceId, category:g.messages[0]?.category||'general', title:g.sourceTitle, messages:g.messages, _dist:g.distance}, g.messages[0]?g.messages[0].isNew:false); if(gi < item.capturedGroups.length-1) h+='<div style="height:1px;background:var(--border);margin:2px 0;"></div>'; }); h+='</div>'; }
-          else if(item.id===activeId && !item.isFromBubble) h += '<div style="padding:8px;text-align:center;color:var(--muted);font-size:0.8rem">No messages.</div>';
-        } else {
-          // 🔧 FIX 1: Only show title row for multi-message items
-          if (isMulti) {
-            h += '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin:4px 0;">';
-            h += '<p class="msg-text" style="font-weight:500; margin:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+sanitize(item.title)+'</p>';
-            // 🔧 FIX 2: Sub button only visible when card is active
-            if (currentTab === 'messages' && item.id === activeId) {
-              h += '<button class="action-btn" style="margin:0; flex-shrink:0;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>';
-            }
-            h += '</div>';
-          }
-          
-          if(item.id===activeId) { 
-            h += '<div style="display:flex;gap:4px;margin:6px 0;flex-wrap:wrap;">'
-              + '<button class="action-btn" onclick="event.stopPropagation();editItem(\''+item.id+'\')">✏️ Edit</button>'
-              + '<button class="action-btn danger" onclick="event.stopPropagation();deleteItem(\''+item.id+'\')">🗑️ Delete</button>'
-              + '<button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️ Range</button>'
-              + '<button class="action-btn" onclick="event.stopPropagation();openModal(\''+item.id+'\')">➕ Add</button>';
-            if (isMulti) h += '<span style="font-size:0.7rem;color:var(--muted);align-self:center">💬 '+msgCount+'</span>';
-            h += '</div>';
-            if(rangeEditorsOpen[item.id]) { 
-              var pct = kmToPercent(item.range, currentItemMaxKm); 
-              h+='<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group">'
-                + '<input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)" onchange="applyFilters()">'
-                + '<input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\',kmToPercent(this.value,currentItemMaxKm));applyFilters()">'
-                + '</div></div>'; 
-            }
-          } else if (isMulti) {
-            h += '<div style="font-size:0.7rem;color:var(--muted);margin:4px 0">💬 '+msgCount+' msgs</div>';
-          }
-
-          if (isMulti) {
-            item.messages.forEach((m,j)=>{ 
-              h+='<div class="sub-item'+(j===0?' original':'')+'" id="msg-'+item.id+'-'+j+'" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgDblClick(\''+item.id+'\','+j+',event)" ontouchstart="startMsgEdit(\''+item.id+'\','+j+',event)" ontouchend="cancelMsgEdit(event)" onmousedown="startMsgEdit(\''+item.id+'\','+j+',event)" onmouseup="cancelMsgEdit(event)">'+(j===0?'<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">Original</div>':'')+'<div class="meta">👤 '+sanitize(m.author)+' · '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+sanitize(m.text)+'<div class="msg-controls" id="controls-'+item.id+'-'+j+'" onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()"><button class="mini-btn" onclick="event.stopPropagation(); doEditMessage(\''+item.id+'\','+j+',event)">✏️ Edit</button><button class="mini-btn danger" onclick="event.stopPropagation(); doDeleteMessage(\''+item.id+'\','+j+',event)">🗑️ Delete</button></div></div>'; 
-            });
-          } else if (msgCount === 1) {
-            var m = item.messages[0]; 
-            h+='<div class="msg-entry" id="msg-'+item.id+'-0" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgDblClick(\''+item.id+'\','+0+',event)" ontouchstart="startMsgEdit(\''+item.id+'\','+0+',event)" ontouchend="cancelMsgEdit(event)" onmousedown="startMsgEdit(\''+item.id+'\','+0+',event)" onmouseup="cancelMsgEdit(event)"><p class="msg-text" style="margin-bottom:2px">'+sanitize(m.text)+'</p><div class="meta">👤 '+sanitize(m.author)+' · 🕒 '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div><div class="msg-controls" id="controls-'+item.id+'-0" onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()"><button class="mini-btn" onclick="event.stopPropagation(); doEditMessage(\''+item.id+'\','+0+',event)">✏️ Edit</button><button class="mini-btn danger" onclick="event.stopPropagation(); doDeleteMessage(\''+item.id+'\','+0+',event)">🗑️ Delete</button></div></div>';
-          } else {
-            h += '<div style="padding:8px;text-align:center;color:var(--muted);font-size:0.8rem">No messages.</div>';
           }
         }
-        card.innerHTML = h; card.onclick = e => { if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.closest('.range-editor')||e.target.closest('.sub-item')||e.target.closest('.msg-entry')||e.target.closest('.msg-controls')) return; setActive(item.id); }; el.appendChild(card);
+
+        // 🔧 Message Content (Identical across tabs)
+        if(s && item.isFromBubble && item._bubbleContent) {
+          h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">'+renderMessageContent(item._bubbleContent, false)+'</div>';
+        } else if(s && item.capturedGroups) {
+          h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px;">';
+          item.capturedGroups.forEach((g,gi) => {
+            h += renderMessageContent({id:g.sourceId, category:g.messages[0]?.category||'general', title:g.sourceTitle, messages:g.messages, _dist:g.distance}, g.messages[0]?g.messages[0].isNew:false);
+            if(gi < item.capturedGroups.length-1) h+='<div style="height:1px;background:var(--border);margin:2px 0;"></div>';
+          });
+          h+='</div>';
+        } else {
+          h += renderMessageContent(item, false);
+        }
+
+        card.innerHTML = h; 
+        card.onclick = e => { if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.closest('.range-editor')||e.target.closest('.sub-item')||e.target.closest('.msg-entry')||e.target.closest('.msg-controls')) return; setActive(item.id); }; 
+        el.appendChild(card);
       });
     }
 
@@ -602,7 +551,25 @@
       });
 
       items.forEach(it => { if(it.category==='subscription')return; var vm=[]; it.messages.forEach(m=>{m.timestamp=toSec(m.timestamp);if(m.timestamp>=cut)vm.push(m);}); var d=getDist(viewLocation,it), cm=cat==='all'||it.category===cat, ic=capIds.has(it.id); if((d<=ur||ic)&&cm) mapMsgs.push(Object.assign({},it,{_dist:d,messages:vm,_isCaptured:ic})); if(d<=ur&&cm) msgs.push(Object.assign({},it,{_dist:d,messages:vm,_isCaptured:ic})); });
+      
       renderMap(mapMsgs.concat(subs)); var li = currentTab==='subscriptions' ? subs : msgs; li.sort((a,b)=>a._dist-b._dist); renderList(li); radiusCircle.setRadius(sa?200000000:ur*1000); saveData();
+    }
+
+    function renderMap(all) {
+      markersLayer.clearLayers(); var col = '#f87171';
+      all.forEach(item => { if(item.category === 'subscription' && item.range > 0 && (!item.isFromBubble || item.id === activeId)) L.circle([item.lat,item.lng], { radius: item.range*1000, color: col, fillColor: col, fillOpacity: 0.12, weight: 2, dashArray: '5,5', itemId: item.id }).addTo(markersLayer); });
+      var icoMap = { general:'💬', question:'❓', event:'🎉', warning:'⚠️', subscription:'📡' };
+      all.forEach(item => {
+        if(!item.lat || !item.lng || item.isFromBubble) return;
+        var s = item.category === 'subscription', act = item.id === activeId, cap = item._isCaptured;
+        var h = icoMap[item.category] || '💬';
+        var c = 'gc-msg-icon' + (s ? ' gc-sub-icon' : '') + (act ? ' active' : '') + (cap ? ' gc-captured' : '');
+        var pop = s ? '<b>'+sanitize(item.title)+'</b><br>📏 Range: '+item.range.toFixed(2)+'km' : '<b>'+sanitize(item.title)+'</b><br>💬 '+item.messages.length+' msgs';
+        var m = L.marker([item.lat, item.lng], { icon: L.divIcon({className:c, html:h, iconSize:[30,30], iconAnchor:[15,30]}), draggable: true }).bindPopup(pop).addTo(markersLayer);
+        m.on('drag', function(e) { if(item.category === 'subscription' && item.range > 0) { var newPos = e.target.getLatLng(); markersLayer.eachLayer(function(layer) { if(layer instanceof L.Circle && layer.options.itemId === item.id) layer.setLatLng(newPos); }); } });
+        m.on('dragend', function(e) { var pos = e.target.getLatLng(); var obj = findItem(item.id); if(obj) { obj.lat = pos.lat; obj.lng = pos.lng; saveData(); applyFilters(); } });
+        m.on('click', function(e) { L.DomEvent.stopPropagation(e); setActive(item.id); });
+      });
     }
 
     function updateUI() { 
@@ -619,12 +586,8 @@
       var t=document.getElementById('msgText').value.trim(); if(!t)return alert('Enter text'); 
       var c=document.getElementById('msgCategory').value; 
       var nm={id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:postTarget.lat,lng:postTarget.lng,text:sanitize(t),category:c,author:'User_'+Math.floor(Math.random()*9000+1000),timestamp:toSec(Date.now())}; 
-      if(postTarget.itemId){ 
-        var i=findItem(postTarget.itemId); 
-        if(i && i.category!=='subscription'){ i.messages.push(nm); if(i._autoTitle) i.title=sanitize(t.length>30?t.substring(0,30)+'…':t); } 
-      } else { 
-        items.push({ id:nm.id, lat:nm.lat, lng:nm.lng, range:c==='subscription'?viewRadius:0, category:c, title:sanitize(t.length>30?t.substring(0,30)+'…':t), messages:c==='subscription'?[]:[nm], createdAt:nm.timestamp, _autoTitle: true }); 
-      } 
+      if(postTarget.itemId){ var i=findItem(postTarget.itemId); if(i && i.category!=='subscription'){ i.messages.push(nm); if(i._autoTitle) i.title=sanitize(t.length>30?t.substring(0,30)+'…':t); } }
+      else { items.push({ id:nm.id, lat:nm.lat, lng:nm.lng, range:c==='subscription'?viewRadius:0, category:c, title:sanitize(t.length>30?t.substring(0,30)+'…':t), messages:c==='subscription'?[]:[nm], createdAt:nm.timestamp, _autoTitle: true }); }
       document.getElementById('addModal').classList.add('hidden'); document.getElementById('msgText').value=''; postTarget={lat:null,lng:null,itemId:null}; saveData(); applyFilters();
     };
     document.getElementById('demoBtn').onclick = () => { 
