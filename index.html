@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v69 - Edit & Delete Markers</title>
+  <title>GeoChat v74 - Unified Slider Zoom Logic</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -232,7 +232,6 @@
       saveData(); applyFilters();
     };
 
-    // 🔧 NEW: Edit & Delete Functions
     window.editItem = function(id) {
       var item = findItem(id); if(!item) return;
       var newTitle = prompt("Edit bubble title:", item.title);
@@ -297,15 +296,25 @@
     var selectedRangeCircle = L.circle([0,0], {radius:0, color:'#8b5cf6', fillColor:'#8b5cf6', fillOpacity:0.12, dashArray:'3,3', weight: 2, interactive: false}).addTo(map);
 
     function getMaxKmFromZoom() { return Math.max(0.05, 0.2 * Math.pow(2, 19 - map.getZoom())); }
-    function getMaxItemKmFromZoom() { return Math.min(50, Math.max(0.05, 0.5 * Math.pow(2, 14 - map.getZoom()))); }
+    
+    // 🔧 UNIFIED ZOOM LOGIC: Same base 2 logic, but 4x larger multiplier
+    function getMaxItemKmFromZoom() { 
+      // Uses identical Math.pow(2, 19 - zoom) scaling as the main view radius
+      // Base 0.8km (4x larger than 0.2km) ensures 3-4x bigger circles
+      var val = 0.8 * Math.pow(2, 19 - map.getZoom());
+      return Math.min(100, Math.max(0.05, val)); 
+    }
 
     function adaptSlidersToZoom() {
       if(viewLocation.lat === 0) return;
-      currentMaxKm = getMaxKmFromZoom(); currentItemMaxKm = getMaxItemKmFromZoom();
+      currentMaxKm = getMaxKmFromZoom(); 
+      currentItemMaxKm = getMaxItemKmFromZoom();
+      
       document.getElementById('sliderMax').textContent = fmtDist(currentMaxKm);
       if(viewRadius > currentMaxKm) { viewRadius = currentMaxKm; radiusCircle.setRadius(viewRadius * 1000); }
       if(viewRadius < minKm) viewRadius = minKm;
       document.getElementById('viewRadius').value = kmToPercent(viewRadius, currentMaxKm);
+      
       items.forEach(function(item) {
         if (rangeEditorsOpen[item.id]) {
           var km = item.range;
@@ -346,11 +355,24 @@
     } else { document.getElementById('viewLocationInfo').innerHTML = '📍 Geo unsupported.'; }
 
     map.on('click', function(e) { 
-      if(viewLocation.lat === 0) { initLocation(e.latlng.lat, e.latlng.lng, false); return; }
-      setActive(null); viewLocation.lat = e.latlng.lat; viewLocation.lng = e.latlng.lng;
+      if(viewLocation.lat === 0) { 
+        initLocation(e.latlng.lat, e.latlng.lng, false); 
+        return; 
+      }
+      setActive(null); 
+      viewLocation.lat = e.latlng.lat; 
+      viewLocation.lng = e.latlng.lng;
       postTarget = { lat: viewLocation.lat, lng: viewLocation.lng, itemId: null };
-      viewMarker.setLatLng(viewLocation); radiusCircle.setLatLng(viewLocation); radiusCircle.setRadius(viewRadius * 1000);
-      refreshViewIcon(); updateUI(); applyFilters(); openModal(); 
+      viewMarker.setLatLng(viewLocation); 
+      radiusCircle.setLatLng(viewLocation); 
+      radiusCircle.setRadius(viewRadius * 1000);
+      refreshViewIcon(); 
+      updateUI(); 
+      applyFilters(); 
+    });
+
+    map.on('dblclick', function(e) {
+       openModal();
     });
 
     window.setActive = function(id) {
@@ -385,16 +407,40 @@
     window.centerMapOnItem = function(id) { setActive(id); };
     window.turnIntoBubble = function(id) { var i = findItem(id); if(i) { i.isThread = true; saveData(); applyFilters(); } };
     window.toggleRangeEditor = function(id) { rangeEditorsOpen[id] = !rangeEditorsOpen[id]; applyFilters(); };
+    
+    // 🔧 DYNAMIC RANGE SLIDER UPDATE
     window.setRangeValue = function(id, val) {
       var pct = parseFloat(val); if(isNaN(pct) || pct < 0) pct = 0;
       var item = findItem(id); if(item) {
-        var newKm = percentToKm(pct, currentItemMaxKm); item.range = Math.round(newKm * 100) / 100; saveData();
-        var slider = document.getElementById('range-slider-' + id); if(slider) slider.value = pct;
-        var num = document.getElementById('range-num-' + id); if(num) num.value = item.range.toFixed(2);
-        var lbl = document.getElementById('range-label-' + id); if(lbl) lbl.textContent = item.range.toFixed(2) + ' km';
-        markersLayer.eachLayer(function(layer) { if(layer instanceof L.Circle && layer.options.itemId === id) layer.setRadius(item.range * 1000); });
+        var newKm = percentToKm(pct, currentItemMaxKm); 
+        item.range = Math.round(newKm * 100) / 100; 
+        saveData();
+        
+        // Update UI inputs
+        var slider = document.getElementById('range-slider-' + id); 
+        if(slider) slider.value = pct;
+        var num = document.getElementById('range-num-' + id); 
+        if(num) num.value = item.range.toFixed(2);
+        var lbl = document.getElementById('range-label-' + id); 
+        if(lbl) lbl.textContent = item.range.toFixed(2) + ' km';
+        
+        // 🔧 Update Map Circles
+        var r = item.range * 1000;
+        
+        // 1. Update the red circle in the markers layer (if it exists)
+        markersLayer.eachLayer(function(layer) { 
+          if(layer instanceof L.Circle && layer.options.itemId === id) {
+            layer.setRadius(r); 
+          } 
+        });
+
+        // 2. Update the purple selected circle if this is the active item
+        if(activeId === id) {
+            selectedRangeCircle.setRadius(r);
+        }
       }
     };
+
     window.applyRangeChange = function(id) { applyFilters(); };
     window.subscribeToBubble = function(id) {
       var item = findItem(id); if(!item) return;
@@ -492,8 +538,8 @@
             if(rangeEditorsOpen[item.id] && !item.isFromBubble) { 
               var pct = kmToPercent(item.range, currentItemMaxKm); 
               h += '<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group">'
-                + '<input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)">'
-                + '<input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\',kmToPercent(this.value,currentItemMaxKm));applyRangeChange(\''+item.id+'\')">'
+                + '<input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)" onchange="applyFilters()">'
+                + '<input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\',kmToPercent(this.value,currentItemMaxKm));applyFilters()">'
                 + '</div></div>'; 
             }
           } else h += '<div style="font-size:0.7rem;color:var(--muted);margin:4px 0">'+(item.isFromBubble?'📥 Locked':'📥 '+item.capturedCount+' msgs')+'</div>';
@@ -514,8 +560,8 @@
               if(rangeEditorsOpen[item.id]) { 
                 var pct = kmToPercent(item.range, currentItemMaxKm); 
                 h+='<div class="range-editor open" onclick="event.stopPropagation()"><label>Range: <span id="range-label-'+item.id+'">'+item.range.toFixed(2)+' km</span></label><div class="range-input-group">'
-                  + '<input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)">'
-                  + '<input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\',kmToPercent(this.value,currentItemMaxKm));applyRangeChange(\''+item.id+'\')">'
+                  + '<input type="range" min="0" max="100" step="0.1" value="'+pct+'" id="range-slider-'+item.id+'" oninput="setRangeValue(\''+item.id+'\',this.value)" onchange="applyFilters()">'
+                  + '<input type="number" min="0" max="'+currentItemMaxKm+'" step="0.01" value="'+item.range.toFixed(2)+'" id="range-num-'+item.id+'" onchange="setRangeValue(\''+item.id+'\',kmToPercent(this.value,currentItemMaxKm));applyFilters()">'
                   + '</div></div>'; 
               }
             } else {
