@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v76 - Custom Icons & SpotIt Fix</title>
+  <title>GeoChat v77 - SVG Icons & Map Fix</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -31,9 +31,14 @@
     .sidebar-header h2 { font-size: 1rem; margin: 0; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
     .view-info { font-size: 0.75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .view-info .highlight { color: var(--primary); font-weight: 500; }
-    #returnBtn { width: 32px; height: 32px; padding: 0; background: var(--card); border: 1px solid var(--border); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; overflow: hidden; }
-    #returnBtn:hover { background: var(--accent); transform: scale(1.05); }
     
+    /* 🔧 STYLED BUTTONS FOR SVG ICONS */
+    .icon-btn { 
+      width: 32px; height: 32px; padding: 0; background: var(--card); border: 1px solid var(--border); border-radius: 50%; 
+      cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; 
+    }
+    .icon-btn:hover { background: var(--accent); transform: scale(1.05); }
+
     .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg); flex-shrink: 0; }
     .tab { flex: 1; padding: 10px; border: none; background: transparent; cursor: pointer; font-size: 0.85rem; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
     .tab:hover { background: var(--card); color: var(--text); }
@@ -52,7 +57,7 @@
     
     select, button { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); cursor: pointer; font-size: 0.85rem; }
     button:hover { background: #e5e7eb; }
-    #spotItBtn { background: var(--primary); color: white; border: none; font-weight: 500; display: none; }
+    #spotItBtn { background: var(--primary); color: white; border: none; font-weight: 500; display: none; align-items: center; gap: 6px; }
     #spotItBtn:hover { background: var(--primary-hover); }
     
     .scrollable-area { flex: 1; overflow-y: auto; padding: 0 0 max(24px, env(safe-area-inset-bottom)); -webkit-overflow-scrolling: touch; overscroll-behavior: contain; min-height: 0; display: flex; flex-direction: column; }
@@ -107,12 +112,12 @@
     .modal-actions { display: flex; gap: 10px; margin-top: 8px; }
     .modal-actions button { flex: 1; padding: 8px; }
 
-    /* 🔧 CUSTOM MARKER CSS */
-    .gc-view-marker { background: transparent !important; border: none !important; font-size: 24px; line-height: 1; width: 30px; height: 30px; text-align: center; cursor: move; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+    /* 🔧 MAP ICON STYLES */
+    .gc-view-marker { background: transparent !important; border: none !important; width: 30px; height: 30px; text-align: center; cursor: move; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
     .gc-view-marker.pulse { animation: pulse 2s infinite; }
-    .gc-msg-icon { background: transparent !important; border: none !important; width: 26px; height: 26px; cursor: grab; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.2)); transition: transform 0.2s; }
+    .gc-msg-icon { background: transparent !important; border: none !important; font-size: 24px; line-height: 1; width: 30px; height: 30px; text-align: center; cursor: grab; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.2)); transition: transform 0.2s; }
     .gc-msg-icon:active { cursor: grabbing; }
-    .gc-msg-icon.active { transform: scale(1.2); filter: drop-shadow(0 0 6px var(--arc)); }
+    .gc-msg-icon.active { transform: scale(1.3); filter: drop-shadow(0 0 6px var(--arc)); }
     .gc-sub-icon { filter: drop-shadow(0 1px 4px rgba(6, 182, 212, 0.5)); }
     .gc-captured { filter: drop-shadow(0 0 4px var(--sub-range)) !important; }
     
@@ -139,13 +144,19 @@
       <div class="drag-handle" id="sheetHandle"></div>
       <div class="sidebar-header">
         <div class="header-left">
-          <h2><span class="icon-marker-svg" style="width:16px;height:16px;"></span> GeoChat</h2>
+          <!-- Inline SVG for header icon -->
+          <h2><span style="display:inline-flex;vertical-align:middle;margin-right:4px;"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#3b82f6"/><circle cx="12" cy="9" r="2.5" fill="#ffffff"/></svg></span> GeoChat</h2>
           <div class="view-info" id="viewLocationInfo">📍 Locating...</div>
         </div>
-        <button id="returnBtn" title="Return to GPS"></button>
+        <!-- Custom GPS Icon -->
+        <button id="returnBtn" class="icon-btn" title="Return to GPS"></button>
       </div>
       <div class="tabs">
-        <button class="tab active" onclick="switchTab('messages')"><span class="icon-marker-svg" style="width:14px;height:14px;"></span> NearBy</button>
+        <!-- Inline SVG for Tab icon -->
+        <button class="tab active" onclick="switchTab('messages')">
+          <span style="display:inline-flex;vertical-align:middle;margin-right:4px;"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#3b82f6"/><circle cx="12" cy="9" r="2.5" fill="#ffffff"/></svg></span> 
+          NearBy
+        </button>
         <button class="tab subs" onclick="switchTab('subscriptions')">📡 Subscriptions</button>
       </div>
       <div class="scrollable-area">
@@ -168,7 +179,10 @@
           </div>
           
           <div class="filter-row">
-            <button id="spotItBtn"><span class="icon-marker-svg" style="width:14px;height:14px;filter:brightness(0) invert(1);"></span> SpotIt</button>
+            <button id="spotItBtn">
+              <span style="display:inline-flex;vertical-align:middle;margin-right:4px;"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#ffffff"/><circle cx="12" cy="9" r="2.5" fill="#2563eb"/></svg></span>
+              SpotIt
+            </button>
             <select id="categoryFilter" style="flex: 1;">
               <option value="all">All Categories</option>
               <option value="general">💬 General</option>
@@ -206,20 +220,10 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // 🔧 SVG ICONS
-    var markerSVG = "data:image/svg+xml;charset=UTF-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z' fill='%233b82f6'/><circle cx='12' cy='9' r='3' fill='%23ffffff'/></svg>";
-    var capturedSVG = "data:image/svg+xml;charset=UTF-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z' fill='%23f97316'/><circle cx='12' cy='9' r='3' fill='%23ffffff'/></svg>";
-    var gpsSVG = "data:image/svg+xml;charset=UTF-8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%239ca3af' stroke='%23e5e7eb' stroke-width='2'/><circle cx='16' cy='16' r='4' fill='%23ffffff'/></svg>";
-
-    // Inject SVG icons into elements
-    document.querySelectorAll('.icon-marker-svg').forEach(function(el) {
-      el.style.backgroundImage = `url('${markerSVG}')`;
-      el.style.backgroundSize = 'contain';
-      el.style.backgroundRepeat = 'no-repeat';
-      el.style.display = 'inline-block';
-    });
-    document.getElementById('returnBtn').style.backgroundImage = `url('${gpsSVG}')`;
-    document.getElementById('returnBtn').style.backgroundSize = 'contain';
+    // 🔧 INJECT CUSTOM SVG ICONS
+    // 1. GPS Icon: Gray circle with white dot
+    var gpsSVG = '<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#9ca3af"/><circle cx="12" cy="12" r="3" fill="#ffffff"/></svg>';
+    document.getElementById('returnBtn').innerHTML = gpsSVG;
 
     var toSec = function(ts) { return ts > 1e12 ? Math.floor(ts / 1000) : ts; };
     var items = JSON.parse(localStorage.getItem('gc_items') || '[]');
@@ -306,7 +310,7 @@
       if(tab === 'messages') document.querySelector('.tab:first-child').classList.add('active');
       else document.querySelector('.tab.subs').classList.add('active');
       
-      // 🔧 FIX: Proper visibility handling
+      // 🔧 FIX: Correct visibility handling on load and switch
       var isNearby = (tab === 'messages' && viewLocation.lat !== 0);
       document.getElementById('viewRangeRow').style.display = isNearby ? 'flex' : 'none';
       document.getElementById('spotItBtn').style.display = (tab === 'messages') ? 'inline-flex' : 'none';
@@ -361,7 +365,7 @@
       map.setView(viewLocation, 13); 
       adaptSlidersToZoom();
       
-      // 🔧 FIX: Initialize buttons correctly on load
+      // 🔧 Initialize buttons correctly on load
       switchTab('messages');
     }
 
@@ -508,13 +512,16 @@
       all.forEach(item => {
         if(!item.lat || !item.lng || item.isFromBubble) return;
         var s = item.category === 'subscription', act = item.id === activeId, cap = item._isCaptured;
-        // 🔧 Use custom SVG for markers
-        var h = `<img src="${cap ? capturedSVG : markerSVG}" style="width:100%;height:100%;" />`;
+        
+        // 🔧 Map Markers (Emojis restored)
+        var icoMap = { general:'💬', question:'❓', event:'🎉', warning:'⚠️', subscription:'📡' };
+        var h = icoMap[item.category] || '📍';
+        
         var c = 'gc-msg-icon' + (s ? ' gc-sub-icon' : '') + (act ? ' active' : '') + (cap ? ' gc-captured' : '');
         var pop = s ? '<b>'+item.title+'</b><br>📏 Range: '+item.range.toFixed(2)+'km' : (item.isThread ? '<b>'+item.title+'</b><br>🎈 '+item.messages.length+' msgs<br>📏 Range: '+item.range.toFixed(2)+'km' : '<b>'+item.author+'</b><br>'+item.messages[0].text);
 
         var m = L.marker([item.lat, item.lng], {
-          icon: L.divIcon({className:c, html:h, iconSize:[26,26], iconAnchor:[13,26]}),
+          icon: L.divIcon({className:c, html:h, iconSize:[30,30], iconAnchor:[15,30]}),
           draggable: true
         }).bindPopup(pop).addTo(markersLayer);
 
