@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v78 - Inline Edit & Header Layout</title>
+  <title>GeoChat v80 - Fixed Gestures & Clean UI</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -99,7 +99,40 @@
     .sub-item.original { background: #e0e7ff; border-left: 3px solid var(--primary); }
     .sub-source { font-size: 0.65rem; color: var(--sub); font-weight: 500; margin-bottom: 2px; }
 
-    .msg-entry { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-bottom: 6px; cursor: pointer; transition: 0.2s; }
+    .msg-entry { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-bottom: 6px; cursor: pointer; transition: 0.2s; user-select: none; -webkit-user-select: none; }
+    .msg-entry:last-child { margin-bottom: 0; }
+    .msg-entry:hover { border-color: var(--bubble); }
+    
+    /* 🔧 FIX 5: Inline message controls */
+    .msg-controls {
+      display: none;
+      gap: 4px;
+      margin-top: 4px;
+      padding-top: 4px;
+      border-top: 1px dashed var(--border);
+    }
+    .msg-controls.active {
+      display: flex;
+    }
+    .msg-controls .mini-btn {
+      padding: 2px 6px;
+      font-size: 0.7rem;
+      background: var(--accent);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .msg-controls .mini-btn.danger {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #991b1b;
+    }
+    .msg-entry.editing, .sub-item.editing {
+      border-color: var(--primary);
+      background: #eff6ff;
+    }
+
+    .msg-entry { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-bottom: 6px; cursor: pointer; transition: 0.2s; user-select: none; -webkit-user-select: none; }
     .msg-entry:last-child { margin-bottom: 0; }
     .msg-entry:hover { border-color: var(--bubble); }
 
@@ -133,6 +166,21 @@
       }
       .modal-content { width: 96%; margin: 10px; max-height: 90vh; overflow-y: auto; }
     }
+    
+    /* 🔧 Accessibility focus styles */
+    :focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+    .tab:focus-visible, .icon-btn:focus-visible, .action-btn:focus-visible, .mini-btn:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+    
+    /* 🔧 Touch improvements */
+    #map { touch-action: pan-x pan-y; }
+    .msg-entry, .sub-item { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    .msg-entry:active, .sub-item:active { background: var(--accent); transition: background 0.1s; }
   </style>
 </head>
 <body>
@@ -143,16 +191,16 @@
       <div class="sidebar-header">
         <div class="header-left">
           <h2><span style="display:inline-flex;vertical-align:middle;margin-right:4px;"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#3b82f6"/><circle cx="12" cy="9" r="2.5" fill="#ffffff"/></svg></span> GeoChat</h2>
-          <div class="view-info" id="viewLocationInfo">📍 Locating...</div>
+          <div class="view-info" id="viewLocationInfo">Locating...</div>
         </div>
-        <button id="returnBtn" class="icon-btn" title="Return to GPS"></button>
+        <button id="returnBtn" class="icon-btn" title="Return to GPS" aria-label="Return to GPS location"></button>
       </div>
       <div class="tabs">
-        <button class="tab active" onclick="switchTab('messages')">
+        <button class="tab active" onclick="switchTab('messages')" role="tab" aria-selected="true" tabindex="0" id="tab-messages">
           <span style="display:inline-flex;vertical-align:middle;margin-right:4px;"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#3b82f6"/><circle cx="12" cy="9" r="2.5" fill="#ffffff"/></svg></span> 
           NearBy
         </button>
-        <button class="tab subs" onclick="switchTab('subscriptions')">📡 Subscriptions</button>
+        <button class="tab subs" onclick="switchTab('subscriptions')" role="tab" aria-selected="false" tabindex="-1" id="tab-subs">📡 Subscriptions</button>
       </div>
       <div class="scrollable-area">
         <div id="filters">
@@ -193,6 +241,7 @@
         <div id="content"></div>
         <div id="sheet-footer">
           <button id="demoBtn" class="subtle-btn">🎲 Load Demo Data</button>
+          <button id="clearDataBtn" class="subtle-btn" style="color:var(--warning)">🗑️ Reset Demo</button>
         </div>
       </div>
     </aside>
@@ -215,33 +264,186 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // 🔧 INJECT CUSTOM SVG ICONS
-    var gpsSVG = '<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#9ca3af"/><circle cx="12" cy="12" r="3" fill="#ffffff"/></svg>';
+    // 🔧 XSS Sanitization utility
+    const sanitize = (str) => {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    };
+
+    // 🔧 Debounce utility for performance
+    const debounce = (fn, delay) => {
+      let timer;
+      return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+      };
+    };
+
+    // 🔧 FIX 3: Correct gray-on-gray target icon for returnBtn
+    var gpsSVG = '<svg width="24" height="24" viewBox="0 0 24 24">'+
+      '<circle cx="12" cy="12" r="10" fill="#9ca3af" opacity="0.3"/>'+
+      '<circle cx="12" cy="12" r="4" fill="#6b7280"/>'+
+      '<circle cx="12" cy="12" r="2" fill="#9ca3af"/>'+
+      '</svg>';
     document.getElementById('returnBtn').innerHTML = gpsSVG;
 
-    // 🔧 LONG PRESS / DOUBLE CLICK TIMER
-    var pressTimer;
-    window.startMsgEdit = function(id) { pressTimer = setTimeout(() => editMsgText(id), 800); };
-    window.cancelMsgEdit = function() { clearTimeout(pressTimer); };
-    window.editMsgText = function(id) {
-      clearTimeout(pressTimer);
-      var item = findItem(id);
-      if(item && item.messages.length > 0) {
-        var newText = prompt("Edit message:", item.messages[0].text);
-        if(newText !== null) {
-          item.messages[0].text = newText.trim();
-          saveData(); applyFilters();
-        }
+    // 🔧 FIX 5: Inline message control logic
+    var activeEditControl = null;
+    var msgEditTimer = null;
+    var msgEditTarget = null;
+
+    window.toggleMsgControls = function(itemId, msgIndex, event) {
+      if(event) event.stopPropagation();
+      
+      // Close any open controls first
+      if (activeEditControl) {
+        var prev = document.querySelector('.msg-controls.active');
+        if (prev) prev.classList.remove('active');
+        var prevCard = document.querySelector('.msg-entry.editing, .sub-item.editing');
+        if (prevCard) prevCard.classList.remove('editing');
+        activeEditControl = null;
+      }
+      
+      // If clicking same item, just close (toggle behavior)
+      var key = itemId + ':' + msgIndex;
+      if (activeEditControl === key) return;
+      
+      // Show controls for this message
+      var controls = document.getElementById('controls-' + itemId + '-' + msgIndex);
+      var card = document.getElementById('msg-' + itemId + '-' + msgIndex);
+      if (controls && card) {
+        controls.classList.add('active');
+        card.classList.add('editing');
+        activeEditControl = key;
       }
     };
 
-    var toSec = function(ts) { return ts > 1e12 ? Math.floor(ts / 1000) : ts; };
-    var items = JSON.parse(localStorage.getItem('gc_items') || '[]');
-    items.forEach(it => {
-      it.createdAt = toSec(it.createdAt) || toSec(Date.now());
-      if(it.messages) it.messages.forEach(m => m.timestamp = toSec(m.timestamp));
-    });
+    window.doEditMessage = function(itemId, msgIndex, event) {
+      if(event) event.stopPropagation();
+      var item = findItem(itemId);
+      if (!item || !item.messages[msgIndex]) return;
+      
+      var currentText = item.messages[msgIndex].text;
+      var newText = prompt("Edit message:", currentText);
+      if (newText !== null && newText.trim() !== "") {
+        item.messages[msgIndex].text = sanitize(newText.trim());
+        // For threads: only update title if it was auto-generated AND this is the first message
+        if (item.isThread && msgIndex === 0 && item._autoTitle) {
+          item.title = newText.trim().length > 30 ? newText.trim().substring(0, 30) + '…' : newText.trim();
+        }
+        saveData();
+        applyFilters();
+      }
+      toggleMsgControls(itemId, msgIndex);
+    };
 
+    window.doDeleteMessage = function(itemId, msgIndex, event) {
+      if(event) event.stopPropagation();
+      if (!confirm("Delete this message?")) return;
+      
+      var item = findItem(itemId);
+      if (!item || !item.messages[msgIndex]) return;
+      
+      item.messages.splice(msgIndex, 1);
+      
+      if (item.messages.length === 0) {
+        var idx = items.indexOf(item);
+        if (idx > -1) items.splice(idx, 1);
+        if (activeId === itemId) activeId = null;
+      } else if (msgIndex === 0 && item.isThread && item._autoTitle) {
+        // Update title if first message was deleted and title was auto
+        item.title = item.messages[0].text.length > 30 ? 
+          item.messages[0].text.substring(0, 30) + '…' : item.messages[0].text;
+      }
+      
+      saveData();
+      applyFilters();
+    };
+
+    window.startMsgEdit = function(id, index, event) {
+      if(event) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+      clearTimeout(msgEditTimer);
+      msgEditTarget = { id: id, index: index };
+      msgEditTimer = setTimeout(function() {
+        toggleMsgControls(msgEditTarget.id, msgEditTarget.index);
+      }, 600);
+    };
+
+    window.cancelMsgEdit = function(event) {
+      if(event) event.stopPropagation();
+      clearTimeout(msgEditTimer);
+      msgEditTimer = null;
+    };
+
+    window.editMsgDblClick = function(id, index, event) {
+      if(event) event.stopPropagation();
+      clearTimeout(msgEditTimer);
+      toggleMsgControls(id, index);
+    };
+
+    // 🔧 FIX 4: Decoupled promptEditMsg (kept for fallback)
+    window.promptEditMsg = function(id, index) {
+        var item = findItem(id);
+        if (!item || !item.messages[index]) return;
+        
+        var currentText = item.messages[index].text;
+        var newText = prompt("Edit message (leave empty to delete):", currentText);
+        
+        if (newText !== null) {
+            if (newText.trim() === "") {
+                item.messages.splice(index, 1);
+                if (item.messages.length === 0) {
+                    var idx = items.indexOf(item);
+                    if (idx > -1) items.splice(idx, 1);
+                    if (activeId === id) activeId = null;
+                } else if (!item.isThread || item._autoTitle) {
+                    item.title = item.messages[0].text.length > 30 ? 
+                      item.messages[0].text.substring(0, 30) + '…' : item.messages[0].text;
+                    item._autoTitle = true;
+                }
+            } else {
+                item.messages[index].text = sanitize(newText.trim());
+                // Never auto-update title from message edit for threads
+            }
+            saveData();
+            applyFilters();
+        }
+    };
+
+    var toSec = function(ts) { return ts > 1e12 ? Math.floor(ts / 1000) : ts; };
+    
+    // 🔧 Defensive data loading
+    const loadItems = () => {
+      try {
+        const raw = localStorage.getItem('gc_items');
+        const parsed = raw ? JSON.parse(raw) : [];
+        return parsed.filter(it => 
+          it && typeof it === 'object' && 
+          typeof it.lat === 'number' && 
+          typeof it.lng === 'number' &&
+          Array.isArray(it.messages)
+        ).map(it => ({
+          ...it,
+          createdAt: toSec(it.createdAt) || toSec(Date.now()),
+          messages: (it.messages || []).map(m => ({
+            ...m,
+            timestamp: toSec(m.timestamp),
+            text: sanitize(m.text),
+            author: sanitize(m.author)
+          }))
+        }));
+      } catch (e) {
+        console.warn('Failed to load items, using empty list', e);
+        return [];
+      }
+    };
+    
+    var items = loadItems();
     var realLocation = null;
     var viewLocation = { lat: 0, lng: 0 }; 
     var activeId = null, currentTab = 'messages';
@@ -269,7 +471,7 @@
     window.editItem = function(id) {
       var item = findItem(id); if(!item) return;
       var newTitle = prompt("Edit bubble title:", item.title);
-      if(newTitle !== null) { item.title = newTitle.trim(); saveData(); applyFilters(); }
+      if(newTitle !== null) { item.title = sanitize(newTitle.trim()); saveData(); applyFilters(); }
     };
     window.deleteItem = function(id) {
       if(!confirm("Delete this marker and its messages?")) return;
@@ -284,29 +486,65 @@
       if(isNew) badgeHtml = '<span class="category-badge new">✨ New</span> ' + badgeHtml;
       html += '<div class="msg-header">'+badgeHtml+'<span class="distance">📏 '+dist+'</span></div>';
       if(item.isThread) {
-        html += '<p class="msg-text" style="font-weight:500">'+item.title+'</p>';
+        html += '<p class="msg-text" style="font-weight:500">'+sanitize(item.title)+'</p>';
         if(item.messages && item.messages.length > 0) {
           for(var j=0; j<item.messages.length; j++) {
             var m = item.messages[j], isOrig = j === 0;
-            html += '<div class="sub-item '+(isOrig?'original':'')+'" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')">'
-              + (isOrig ? '<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">📍 Original</div>' : '')
-              + '<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+m.text+'</div>';
+            // 🔧 FIX 5: Added inline controls + sanitization
+            html += '<div class="sub-item '+(isOrig?'original':'')+'" id="msg-'+item.id+'-'+j+'" '+
+              'onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')" '+
+              'ondblclick="editMsgDblClick(\''+item.id+'\','+j+',event)" '+
+              'ontouchstart="startMsgEdit(\''+item.id+'\','+j+',event)" '+
+              'ontouchend="cancelMsgEdit(event)" '+
+              'onmousedown="startMsgEdit(\''+item.id+'\','+j+',event)" '+
+              'onmouseup="cancelMsgEdit(event)">'+
+              (isOrig ? '<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">Original</div>' : '')+
+              '<div class="meta">👤 '+sanitize(m.author)+' · '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+
+              sanitize(m.text)+
+              '<div class="msg-controls" id="controls-'+item.id+'-'+j+'" onclick="event.stopPropagation()">'+
+                '<button class="mini-btn" onclick="doEditMessage(\''+item.id+'\','+j+',event)">✏️ Edit</button>'+
+                '<button class="mini-btn danger" onclick="doDeleteMessage(\''+item.id+'\','+j+',event)">🗑️ Delete</button>'+
+              '</div>'+
+            '</div>';
           }
         }
       } else {
         var m = item.messages[0];
-        html += '<div class="msg-entry" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgText(\''+item.id+'\')" ontouchstart="startMsgEdit(\''+item.id+'\')" ontouchend="cancelMsgEdit()" onmousedown="startMsgEdit(\''+item.id+'\')" onmouseup="cancelMsgEdit()">'
-          + '<p class="msg-text" style="margin-bottom:2px">'+m.text+'</p>'
-          + '<div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div></div>';
+        // 🔧 FIX 5: Added inline controls + sanitization
+        html += '<div class="msg-entry" id="msg-'+item.id+'-0" '+
+          'onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')" '+
+          'ondblclick="editMsgDblClick(\''+item.id+'\','+0+',event)" '+
+          'ontouchstart="startMsgEdit(\''+item.id+'\','+0+',event)" '+
+          'ontouchend="cancelMsgEdit(event)" '+
+          'onmousedown="startMsgEdit(\''+item.id+'\','+0+',event)" '+
+          'onmouseup="cancelMsgEdit(event)">'+
+          '<p class="msg-text" style="margin-bottom:2px">'+sanitize(m.text)+'</p>'+
+          '<div class="meta">👤 '+sanitize(m.author)+' · 🕒 '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+
+          '<div class="msg-controls" id="controls-'+item.id+'-0" onclick="event.stopPropagation()">'+
+            '<button class="mini-btn" onclick="doEditMessage(\''+item.id+'\','+0+',event)">✏️ Edit</button>'+
+            '<button class="mini-btn danger" onclick="doDeleteMessage(\''+item.id+'\','+0+',event)">🗑️ Delete</button>'+
+          '</div>'+
+        '</div>';
       }
       return html;
     }
 
     window.switchTab = function(tab) {
       currentTab = tab;
-      document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-      if(tab === 'messages') document.querySelector('.tab:first-child').classList.add('active');
-      else document.querySelector('.tab.subs').classList.add('active');
+      document.querySelectorAll('.tab').forEach(function(t) { 
+        t.classList.remove('active'); 
+        t.setAttribute('aria-selected', 'false');
+        t.setAttribute('tabindex', '-1');
+      });
+      if(tab === 'messages') {
+        document.querySelector('.tab:first-child').classList.add('active');
+        document.getElementById('tab-messages').setAttribute('aria-selected', 'true');
+        document.getElementById('tab-messages').setAttribute('tabindex', '0');
+      } else {
+        document.querySelector('.tab.subs').classList.add('active');
+        document.getElementById('tab-subs').setAttribute('aria-selected', 'true');
+        document.getElementById('tab-subs').setAttribute('tabindex', '0');
+      }
       var isNearby = (tab === 'messages' && viewLocation.lat !== 0);
       document.getElementById('viewRangeRow').style.display = isNearby ? 'flex' : 'none';
       document.getElementById('spotItBtn').style.display = (tab === 'messages') ? 'inline-flex' : 'none';
@@ -343,16 +581,42 @@
     }
     map.on('zoomend', adaptSlidersToZoom);
 
+    // 🔧 FIX 1: Improved initLocation with guaranteed updateUI calls
     function initLocation(lat, lng, success) {
       viewLocation = { lat, lng };
       if (success) realLocation = { lat, lng }; else realLocation = null;
       if (!viewMarker) {
-        viewMarker = L.marker([lat, lng], { icon: L.divIcon({ className: 'gc-view-marker pulse', html: '...', iconSize: [30, 30], iconAnchor: [15, 15] }), draggable: true, zIndexOffset: 2000 }).addTo(map);
-        viewMarker.on('drag', function(e) { var pos = e.target.getLatLng(); viewLocation.lat = pos.lat; viewLocation.lng = pos.lng; radiusCircle.setLatLng(pos); });
-        viewMarker.on('dragend', function(e) { var pos = e.target.getLatLng(); viewLocation.lat = pos.lat; viewLocation.lng = pos.lng; radiusCircle.setLatLng(pos); refreshViewIcon(); updateUI(); applyFilters(); });
+        viewMarker = L.marker([lat, lng], { 
+          icon: L.divIcon({ 
+            className: 'gc-view-marker pulse', 
+            html: '🔵', 
+            iconSize: [30, 30], 
+            iconAnchor: [15, 15] 
+          }), 
+          draggable: true, 
+          zIndexOffset: 2000 
+        }).addTo(map);
+        viewMarker.on('drag', function(e) { 
+          var pos = e.target.getLatLng(); 
+          viewLocation.lat = pos.lat; 
+          viewLocation.lng = pos.lng; 
+          radiusCircle.setLatLng(pos); 
+        });
+        viewMarker.on('dragend', function(e) { 
+          var pos = e.target.getLatLng(); 
+          viewLocation.lat = pos.lat; 
+          viewLocation.lng = pos.lng; 
+          radiusCircle.setLatLng(pos); 
+          refreshViewIcon(); 
+          updateUI(); 
+          applyFilters(); 
+        });
       } else { viewMarker.setLatLng([lat, lng]); }
       radiusCircle.setLatLng([lat, lng]);
-      map.setView(viewLocation, 13); adaptSlidersToZoom();
+      map.setView(viewLocation, 13); 
+      adaptSlidersToZoom();
+      // 🔧 CRITICAL: Always update UI after location set
+      updateUI();
       switchTab('messages');
     }
 
@@ -363,11 +627,34 @@
       if(el) { el.innerHTML = isReal ? '🔵' : '👁️'; el.className = 'gc-view-marker' + (isReal ? '' : ' pulse'); }
     }
 
+    // 🔧 FIX 1: Ensure updateUI is called in all geolocation paths
     if(navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(function(p) { initLocation(p.coords.latitude, p.coords.longitude, true); }, function() { map.setView([0,0], 2); document.getElementById('viewLocationInfo').innerHTML = '📍 <span style="color:var(--warning)">GPS denied. Tap map.</span>'; });
-    } else { document.getElementById('viewLocationInfo').innerHTML = '📍 Geo unsupported.'; }
+      navigator.geolocation.getCurrentPosition(
+        function(p) { 
+          initLocation(p.coords.latitude, p.coords.longitude, true); 
+          setTimeout(updateUI, 50); // Double-call for DOM readiness
+        }, 
+        function() { 
+          map.setView([0,0], 2); 
+          document.getElementById('viewLocationInfo').innerHTML = '<span style="color:var(--warning)">GPS denied. Tap map.</span>';
+          updateUI();
+        }
+      );
+    } else { 
+      document.getElementById('viewLocationInfo').innerHTML = '<span style="color:var(--warning)">Geo unsupported.</span>';
+      updateUI();
+    }
 
-    map.on('click', function(e) { 
+    // 🔧 Close inline controls on map click
+    map.on('click', function(e) {
+      if (activeEditControl) {
+        var controls = document.querySelector('.msg-controls.active');
+        if (controls) controls.classList.remove('active');
+        var card = document.querySelector('.msg-entry.editing, .sub-item.editing');
+        if (card) card.classList.remove('editing');
+        activeEditControl = null;
+      }
+      
       if(viewLocation.lat === 0) { initLocation(e.latlng.lat, e.latlng.lng, false); return; }
       setActive(null); viewLocation.lat = e.latlng.lat; viewLocation.lng = e.latlng.lng;
       postTarget = { lat: viewLocation.lat, lng: viewLocation.lng, itemId: null };
@@ -426,23 +713,57 @@
     window.applyRangeChange = function(id) { applyFilters(); };
     window.subscribeToBubble = function(id) {
       var item = findItem(id); if(!item) return;
-      items.push({ id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), lat: item.lat, lng: item.lng, range: item.range, isThread: false, category: 'subscription', title: item.title, messages: [], isFromBubble: true, sourceBubbleId: id, allowedTags: allTags, createdAt: toSec(Date.now()), viewLog: {} });
+      items.push({ 
+        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), 
+        lat: item.lat, 
+        lng: item.lng, 
+        range: item.range, 
+        isThread: false, 
+        category: 'subscription', 
+        title: sanitize(item.title), 
+        messages: [], 
+        isFromBubble: true, 
+        sourceBubbleId: id, 
+        allowedTags: allTags, 
+        createdAt: toSec(Date.now()), 
+        viewLog: {} 
+      });
       saveData(); switchTab('subscriptions'); applyFilters();
     };
-    window.editSubscription = function(id) { var i = findItem(id); if(!i) return; var t = prompt("Edit title:", i.title); if(t && t.trim()) { i.title = t.trim(); saveData(); applyFilters(); } };
+    window.editSubscription = function(id) { var i = findItem(id); if(!i) return; var t = prompt("Edit title:", i.title); if(t && t.trim()) { i.title = sanitize(t.trim()); saveData(); applyFilters(); } };
     window.deleteSubscription = function(id) { if(!confirm("Delete?")) return; var idx = items.findIndex(x => x.id === id); if(idx > -1) { items.splice(idx, 1); delete rangeEditorsOpen[id]; saveData(); applyFilters(); } };
     window.openModal = function(itemId) {
       var m = document.getElementById('addModal'), t = document.getElementById('modalTitle');
-      if(itemId) { var i = findItem(itemId); t.textContent = '➕ Add to Thread: ' + (i?i.title:''); postTarget = { lat: i.lat, lng: i.lng, itemId: itemId }; }
+      if(itemId) { var i = findItem(itemId); t.textContent = '➕ Add to Thread: ' + (i?sanitize(i.title):''); postTarget = { lat: i.lat, lng: i.lng, itemId: itemId }; }
       else t.textContent = '📝 Leave a Message'; m.classList.remove('hidden');
     };
 
-    document.getElementById('viewRadius').addEventListener('input', function(e) { viewRadius = percentToKm(parseFloat(e.target.value), currentMaxKm); document.getElementById('radiusVal').textContent = fmtDist(viewRadius); radiusCircle.setRadius(viewRadius * 1000); if(!document.getElementById('showAll').checked) applyFilters(); });
-    document.getElementById('time').addEventListener('input', function(e) { viewTimeH = minTimeH * Math.pow(maxTimeH/minTimeH, e.target.value/100); applyFilters(); });
+    // 🔧 Debounced filter application for performance
+    const debouncedApplyFilters = debounce(applyFilters, 150);
+
+    document.getElementById('viewRadius').addEventListener('input', function(e) { 
+      viewRadius = percentToKm(parseFloat(e.target.value), currentMaxKm); 
+      document.getElementById('radiusVal').textContent = fmtDist(viewRadius); 
+      radiusCircle.setRadius(viewRadius * 1000); 
+      if(!document.getElementById('showAll').checked) debouncedApplyFilters(); 
+    });
+    document.getElementById('time').addEventListener('input', function(e) { 
+      viewTimeH = minTimeH * Math.pow(maxTimeH/minTimeH, e.target.value/100); 
+      debouncedApplyFilters(); 
+    });
     document.getElementById('categoryFilter').addEventListener('change', applyFilters);
     document.getElementById('showAll').addEventListener('change', function(e) { 
-      if(e.target.checked) { viewRadius=currentMaxKm; document.getElementById('viewRadius').value=100; document.getElementById('radiusVal').textContent='∞'; radiusCircle.setRadius(200000000); } 
-      else { viewRadius = 5; document.getElementById('viewRadius').value = kmToPercent(viewRadius, currentMaxKm); document.getElementById('radiusVal').textContent = fmtDist(viewRadius); radiusCircle.setRadius(viewRadius * 1000); }
+      if(e.target.checked) { 
+        viewRadius=currentMaxKm; 
+        document.getElementById('viewRadius').value=100; 
+        document.getElementById('radiusVal').textContent='∞'; 
+        radiusCircle.setRadius(200000000); 
+      } else { 
+        viewRadius = 5; 
+        document.getElementById('viewRadius').value = kmToPercent(viewRadius, currentMaxKm); 
+        document.getElementById('radiusVal').textContent = fmtDist(viewRadius); 
+        radiusCircle.setRadius(viewRadius * 1000); 
+      }
       applyFilters(); 
     });
 
@@ -458,7 +779,7 @@
         var icoMap = { general:'💬', question:'❓', event:'🎉', warning:'⚠️', subscription:'📡' };
         var h = icoMap[item.category] || '📍';
         var c = 'gc-msg-icon' + (s ? ' gc-sub-icon' : '') + (act ? ' active' : '') + (cap ? ' gc-captured' : '');
-        var pop = s ? '<b>'+item.title+'</b><br>📏 Range: '+item.range.toFixed(2)+'km' : (item.isThread ? '<b>'+item.title+'</b><br>🎈 '+item.messages.length+' msgs<br>📏 Range: '+item.range.toFixed(2)+'km' : '<b>'+item.author+'</b><br>'+item.messages[0].text);
+        var pop = s ? '<b>'+sanitize(item.title)+'</b><br>📏 Range: '+item.range.toFixed(2)+'km' : (item.isThread ? '<b>'+sanitize(item.title)+'</b><br>🎈 '+item.messages.length+' msgs<br>📏 Range: '+item.range.toFixed(2)+'km' : '<b>'+sanitize(item.messages[0].author)+'</b><br>'+sanitize(item.messages[0].text));
         var m = L.marker([item.lat, item.lng], { icon: L.divIcon({className:c, html:h, iconSize:[30,30], iconAnchor:[15,30]}), draggable: true }).bindPopup(pop).addTo(markersLayer);
         m.on('drag', function(e) {
           if(item.category === 'subscription' && item.range > 0) {
@@ -488,12 +809,13 @@
         var bt = s?(item.isFromBubble?'🎈 Bubble':'📡 Subscription'):(cm[item.category]||'💬 Message')+(item.isThread?' Thread':'');
         var h = '<div class="msg-header"><span class="category-badge '+(s?'subscription':item.category)+'">'+bt+'</span><span class="distance">📏 '+d+'</span></div>';
         if(s) {
-          // 🔧 TITLE + SUB BUTTON ON SAME LINE
           h += '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin:4px 0;">';
-          h += '<p class="msg-text" style="font-weight:500; margin:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+item.title+'</p>';
-          h += '<button class="action-btn" style="margin:0; flex-shrink:0;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>';
+          h += '<p class="msg-text" style="font-weight:500; margin:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+sanitize(item.title)+'</p>';
+          // 🔧 FIX 2: Only show Sub button on messages tab
+          if (currentTab === 'messages') {
+            h += '<button class="action-btn" style="margin:0; flex-shrink:0;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>';
+          }
           h += '</div>';
-          
           if(item.id===activeId) {
             var rc = item.isFromBubble?'<button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">📥 Locked</span>':'<button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️</button><button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">📥 '+item.capturedCount+'</span>';
             h += '<div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;">'+rc+'</div>';
@@ -514,12 +836,13 @@
           else if(item.id===activeId && !item.isFromBubble) h += '<div style="padding:8px;text-align:center;color:var(--muted);font-size:0.8rem">No messages.</div>';
         } else {
           if(item.isThread) {
-            // 🔧 TITLE + SUB BUTTON ON SAME LINE
             h += '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin:4px 0;">';
-            h += '<p class="msg-text" style="font-weight:500; margin:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+item.title+'</p>';
-            h += '<button class="action-btn" style="margin:0; flex-shrink:0;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>';
+            h += '<p class="msg-text" style="font-weight:500; margin:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'+sanitize(item.title)+'</p>';
+            // 🔧 FIX 2: Only show Sub button on messages tab
+            if (currentTab === 'messages') {
+              h += '<button class="action-btn" style="margin:0; flex-shrink:0;" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>';
+            }
             h += '</div>';
-            
             if(item.id===activeId) { 
               h += '<div style="display:flex;gap:4px;margin:6px 0;flex-wrap:wrap;">'
                 + '<button class="action-btn" onclick="event.stopPropagation();editItem(\''+item.id+'\')">✏️ Edit</button>'
@@ -535,10 +858,41 @@
                   + '</div></div>'; 
               }
             } else { h += '<div style="font-size:0.7rem;color:var(--muted);margin:4px 0">💬 '+item.messages.length+' msgs</div>'; }
-            if(item.messages) item.messages.forEach((m,j)=>{ h+='<div class="sub-item'+(j===0?' original':'')+'" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')">'+(j===0?'<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">📍 Original</div>':'')+'<div class="meta">👤 '+m.author+' · '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+m.text+'</div>'; });
+            if(item.messages) item.messages.forEach((m,j)=>{ 
+                // 🔧 FIX 4 & 5: Decoupled title + inline controls + sanitization
+                h+='<div class="sub-item'+(j===0?' original':'')+'" id="msg-'+item.id+'-'+j+'" '+
+                  'onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')" '+
+                  'ondblclick="editMsgDblClick(\''+item.id+'\','+j+',event)" '+
+                  'ontouchstart="startMsgEdit(\''+item.id+'\','+j+',event)" '+
+                  'ontouchend="cancelMsgEdit(event)" '+
+                  'onmousedown="startMsgEdit(\''+item.id+'\','+j+',event)" '+
+                  'onmouseup="cancelMsgEdit(event)">'+
+                  (j===0?'<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">Original</div>':'')+
+                  '<div class="meta">👤 '+sanitize(m.author)+' · '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+
+                  sanitize(m.text)+
+                  '<div class="msg-controls" id="controls-'+item.id+'-'+j+'" onclick="event.stopPropagation()">'+
+                    '<button class="mini-btn" onclick="doEditMessage(\''+item.id+'\','+j+',event)">✏️ Edit</button>'+
+                    '<button class="mini-btn danger" onclick="doDeleteMessage(\''+item.id+'\','+j+',event)">🗑️ Delete</button>'+
+                  '</div>'+
+                '</div>'; 
+            });
           } else { 
             var m = item.messages[0]; 
-            h+='<div class="msg-entry" onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgText(\''+item.id+'\')" ontouchstart="startMsgEdit(\''+item.id+'\')" ontouchend="cancelMsgEdit()" onmousedown="startMsgEdit(\''+item.id+'\')" onmouseup="cancelMsgEdit()"><p class="msg-text" style="margin-bottom:2px">'+m.text+'</p><div class="meta">👤 '+m.author+' · 🕒 '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div></div>';
+            // 🔧 FIX 4 & 5: Decoupled title + inline controls + sanitization
+            h+='<div class="msg-entry" id="msg-'+item.id+'-0" '+
+              'onclick="event.stopPropagation();centerMapOnItem(\''+item.id+'\')" '+
+              'ondblclick="editMsgDblClick(\''+item.id+'\','+0+',event)" '+
+              'ontouchstart="startMsgEdit(\''+item.id+'\','+0+',event)" '+
+              'ontouchend="cancelMsgEdit(event)" '+
+              'onmousedown="startMsgEdit(\''+item.id+'\','+0+',event)" '+
+              'onmouseup="cancelMsgEdit(event)">'+
+              '<p class="msg-text" style="margin-bottom:2px">'+sanitize(m.text)+'</p>'+
+              '<div class="meta">👤 '+sanitize(m.author)+' · 🕒 '+new Date(m.timestamp*1000).toLocaleString([],{hour:'2-digit',minute:'2-digit'})+'</div>'+
+              '<div class="msg-controls" id="controls-'+item.id+'-0" onclick="event.stopPropagation()">'+
+                '<button class="mini-btn" onclick="doEditMessage(\''+item.id+'\','+0+',event)">✏️ Edit</button>'+
+                '<button class="mini-btn danger" onclick="doDeleteMessage(\''+item.id+'\','+0+',event)">🗑️ Delete</button>'+
+              '</div>'+
+            '</div>';
             if(item.id === activeId) {
               h += '<div style="display:flex;gap:4px;margin:6px 0;">'
                 + '<button class="action-btn" onclick="event.stopPropagation();editItem(\''+item.id+'\')">✏️ Edit</button>'
@@ -547,7 +901,7 @@
             } else { h += '<button class="action-btn" style="margin-top:4px;" onclick="event.stopPropagation();turnIntoBubble(\''+item.id+'\')">🎈 Bubble</button>'; }
           }
         }
-        card.innerHTML = h; card.onclick = e => { if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.closest('.range-editor')||e.target.closest('.sub-item')||e.target.closest('.msg-entry')) return; setActive(item.id); }; el.appendChild(card);
+        card.innerHTML = h; card.onclick = e => { if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.closest('.range-editor')||e.target.closest('.sub-item')||e.target.closest('.msg-entry')||e.target.closest('.msg-controls')) return; setActive(item.id); }; el.appendChild(card);
       });
     }
 
@@ -565,8 +919,12 @@
         if(it.isFromBubble && it.sourceBubbleId){ var sb=findItem(it.sourceBubbleId); if(sb)it._bubbleContent=sb; } 
         else { 
           var cg={}; items.forEach(sc=>{ 
-            if(sc.id===it.id||sc.category==='subscription')return; var ds=getDist(it,sc); if(ds<=it.range){ var v=[]; sc.messages.forEach(m=>{ m.timestamp=toSec(m.timestamp); if(m.timestamp>=cut){ if(!it.viewLog[sc.id])it.viewLog[sc.id]=now; var isNew=(toSec(sc.createdAt)>=it.createdAt)&&(now-it.viewLog[sc.id]<86400); m.isNew=isNew; var tags=it.allowedTags||[],isCatMatch=tags.length===0||tags.includes(m.category); if(isCatMatch && (!tags.includes('new')||isNew)){v.push(m);capIds.add(sc.id);} }}); if(v.length){v.sort((a,b)=>b.timestamp-a.timestamp);cg[sc.id]={sourceId:sc.id,sourceTitle:sc.title,distance:ds,messages:v};} } }); 
-          var ga=Object.values(cg).sort((a,b)=>a.distance-b.distance); var tc=0; ga.forEach(g=>tc+=g.messages.length); it.capturedGroups=ga; it.capturedCount=tc; 
+            if(sc.id===it.id||sc.category==='subscription')return; var ds=getDist(it,sc); 
+            if(ds<=it.range){ 
+              var v=[]; sc.messages.forEach(m=>{ m.timestamp=toSec(m.timestamp); if(m.timestamp>=cut){ if(!it.viewLog[sc.id])it.viewLog[sc.id]=now; var isNew=(toSec(sc.createdAt)>=it.createdAt)&&(now-it.viewLog[sc.id]<86400); m.isNew=isNew; var tags=it.allowedTags||[],isCatMatch=tags.length===0||tags.includes(m.category); if(isCatMatch && (!tags.includes('new')||isNew)){v.push(m);capIds.add(sc.id);} }}); 
+              if(v.length){v.sort((a,b)=>b.timestamp-a.timestamp);cg[sc.id]={sourceId:sc.id,sourceTitle:sc.title,distance:ds,messages:v};} 
+            } 
+          }); var ga=Object.values(cg).sort((a,b)=>a.distance-b.distance); var tc=0; ga.forEach(g=>tc+=g.messages.length); it.capturedGroups=ga; it.capturedCount=tc; 
         } subs.push(Object.assign({},it,{_dist:d})); 
       });
 
@@ -574,30 +932,143 @@
       renderMap(mapMsgs.concat(subs)); var li = currentTab==='subscriptions' ? subs : msgs; li.sort((a,b)=>a._dist-b._dist); renderList(li); radiusCircle.setRadius(sa?200000000:ur*1000); saveData();
     }
 
-    function updateUI() { var isR = realLocation && getDist(viewLocation, realLocation)<0.1; document.getElementById('viewLocationInfo').innerHTML = isR ? '📍 <span class="highlight">GPS</span>' : '👁️ <span class="highlight">'+(viewLocation.lat !== 0 ? viewLocation.lat.toFixed(4)+', '+viewLocation.lng.toFixed(4):'Tap map')+'</span>'; document.getElementById('returnBtn').style.display = isR && viewLocation.lat !== 0 ? 'none' : (realLocation ? 'flex' : 'none'); }
+    // 🔧 FIX 1: Robust updateUI that handles all states
+    function updateUI() { 
+      var isR = realLocation && getDist(viewLocation, realLocation)<0.1; 
+      var el = document.getElementById('viewLocationInfo');
+      
+      if (viewLocation.lat === 0 && viewLocation.lng === 0) {
+          el.innerHTML = 'Locating...';
+      } else if (isR) {
+          el.innerHTML = '<span class="highlight">GPS</span>';
+      } else {
+          el.innerHTML = '<span class="highlight">'+viewLocation.lat.toFixed(4)+', '+viewLocation.lng.toFixed(4)+'</span>';
+      }
+      
+      document.getElementById('returnBtn').style.display = isR && viewLocation.lat !== 0 ? 'none' : (realLocation ? 'flex' : 'none'); 
+    }
+    
     document.getElementById('returnBtn').onclick = () => { if(realLocation){ viewLocation={...realLocation}; viewMarker.setLatLng(viewLocation); radiusCircle.setLatLng(viewLocation); radiusCircle.setRadius(viewRadius*1000); refreshViewIcon(); updateUI(); applyFilters(); map.panTo(viewLocation,{animate:true}); }};
     document.getElementById('cancelBtn').onclick = () => document.getElementById('addModal').classList.add('hidden');
     document.getElementById('submitBtn').onclick = () => { 
       var t=document.getElementById('msgText').value.trim(); if(!t)return alert('Enter text'); 
       var c=document.getElementById('msgCategory').value; 
-      var nm={id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:postTarget.lat,lng:postTarget.lng,text:t,category:c,author:'User_'+Math.floor(Math.random()*9000+1000),timestamp:toSec(Date.now())}; 
-      if(postTarget.itemId){ var i=findItem(postTarget.itemId); if(i&&i.category!=='subscription'){i.messages.push(nm);i.title=t;}} 
+      var nm={id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:postTarget.lat,lng:postTarget.lng,text:sanitize(t),category:c,author:'User_'+Math.floor(Math.random()*9000+1000),timestamp:toSec(Date.now())}; 
+      if(postTarget.itemId){ var i=findItem(postTarget.itemId); if(i&&i.category!=='subscription'){i.messages.push(nm);if(i._autoTitle){i.title=sanitize(t.length>30?t.substring(0,30)+'…':t);}}} 
       else { 
-        // 🔧 NO MORE TRUNCATION: full title used
-        items.push({id:nm.id,lat:nm.lat,lng:nm.lng,range:c==='subscription'?viewRadius:0,isThread:false,category:c,title:t,messages:c==='subscription'?[]:[nm], createdAt:nm.timestamp}); 
+        var newItem = {
+          id:nm.id,
+          lat:nm.lat,
+          lng:nm.lng,
+          range:c==='subscription'?viewRadius:0,
+          isThread:false,
+          category:c,
+          title:sanitize(t.length>30?t.substring(0,30)+'…':t),
+          messages:c==='subscription'?[]:[nm], 
+          createdAt:nm.timestamp,
+          _autoTitle: true  // 🔧 FIX 4: Mark auto-generated titles
+        };
+        items.push(newItem); 
       } 
-      document.getElementById('addModal').classList.add('hidden');document.getElementById('msgText').value='';postTarget={lat:null,lng:null,itemId:null};saveData();applyFilters();
+      document.getElementById('addModal').classList.add('hidden');
+      document.getElementById('msgText').value='';
+      postTarget={lat:null,lng:null,itemId:null};
+      saveData();
+      applyFilters();
     };
-    document.getElementById('demoBtn').onclick = () => { if(items.length>10 && !confirm('Replace data?'))return; var cats=['general','question','event','warning'], txts=['Coffee ☕','Open?','Event 🎵','Alert ⚠️','View 🌅','Walk?','Traffic 🚗','Shop 🛍️','Dog 🐕','Music ']; var di=[]; var nowSec = toSec(Date.now()); for(var i=0;i<12;i++){var dist=[0.1,0.5,2,10,30][Math.floor(Math.random()*5)],ang=Math.random()*Math.PI*2; var dl=(dist/111.32)*Math.cos(ang),dln=(dist/(111.32*Math.cos(viewLocation.lat*Math.PI/180)))*Math.sin(ang); var t=txts[Math.floor(Math.random()*txts.length)]; var msgTs = nowSec - Math.floor(Math.random()*86400*7); di.push({id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:viewLocation.lat+dl,lng:viewLocation.lng+dln,range:0,isThread:false,category:cats[Math.floor(Math.random()*cats.length)],title:t, createdAt:msgTs, messages:[{id:crypto.randomUUID(),text:t,category:cats[Math.floor(Math.random()*cats.length)],author:'Demo_'+(i+1),timestamp:msgTs}]});} di.push({id:crypto.randomUUID(),lat:viewLocation.lat,lng:viewLocation.lng,range:Math.min(5,currentItemMaxKm),isThread:false,category:'subscription',title:'Local Feed 📡',messages:[],allowedTags:allTags,createdAt:nowSec,viewLog:{}}); items=di;saveData();applyFilters();};
+    
+    document.getElementById('demoBtn').onclick = () => { 
+      if(items.length>10 && !confirm('Replace data?'))return; 
+      var cats=['general','question','event','warning'], 
+          txts=['Coffee ☕','Open?','Event 🎵','Alert ⚠️','View 🌅','Walk?','Traffic 🚗','Shop 🛍️','Dog 🐕','Music ']; 
+      var di=[]; var nowSec = toSec(Date.now()); 
+      for(var i=0;i<12;i++){
+        var dist=[0.1,0.5,2,10,30][Math.floor(Math.random()*5)],
+            ang=Math.random()*Math.PI*2; 
+        var dl=(dist/111.32)*Math.cos(ang),
+            dln=(dist/(111.32*Math.cos(viewLocation.lat*Math.PI/180)))*Math.sin(ang); 
+        var t=txts[Math.floor(Math.random()*txts.length)]; 
+        var msgTs = nowSec - Math.floor(Math.random()*86400*7); 
+        di.push({
+          id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),
+          lat:viewLocation.lat+dl,
+          lng:viewLocation.lng+dln,
+          range:0,
+          isThread:false,
+          category:cats[Math.floor(Math.random()*cats.length)],
+          title:sanitize(t),
+          createdAt:msgTs, 
+          _autoTitle: true,  // 🔧 FIX 4: Demo items have auto titles
+          messages:[{
+            id:crypto.randomUUID(),
+            text:sanitize(t),
+            category:cats[Math.floor(Math.random()*cats.length)],
+            author:'Demo_'+(i+1),
+            timestamp:msgTs
+          }]
+        });
+      } 
+      di.push({
+        id:crypto.randomUUID(),
+        lat:viewLocation.lat,
+        lng:viewLocation.lng,
+        range:Math.min(5,currentItemMaxKm),
+        isThread:false,
+        category:'subscription',
+        title:'Local Feed 📡',
+        messages:[],
+        allowedTags:allTags,
+        createdAt:nowSec,
+        viewLog:{}
+      }); 
+      items=di;
+      saveData();
+      applyFilters();
+    };
+    
+    // 🔧 Clear data button
+    document.getElementById('clearDataBtn')?.addEventListener('click', () => {
+      if(confirm('Clear all messages and reset app?')) {
+        localStorage.removeItem('gc_items');
+        items = [];
+        applyFilters();
+      }
+    });
+    
     function saveData() { localStorage.setItem('gc_items', JSON.stringify(items)); }
-    initTimeSlider(); function initTimeSlider(){ var r=viewTimeH/minTimeH, mr=maxTimeH/minTimeH; document.getElementById('time').value=Math.min(100,Math.max(0,100*(Math.log(r)/Math.log(mr)))); document.getElementById('timeVal').textContent=fmtTime(viewTimeH); }
+    
+    function initTimeSlider(){ 
+      var r=viewTimeH/minTimeH, mr=maxTimeH/minTimeH; 
+      document.getElementById('time').value=Math.min(100,Math.max(0,100*(Math.log(r)/Math.log(mr)))); 
+      document.getElementById('timeVal').textContent=fmtTime(viewTimeH); 
+    }
+    initTimeSlider();
 
+    // Close inline controls when clicking in content area outside messages
+    document.getElementById('content')?.addEventListener('click', function(e) {
+      if (!e.target.closest('.msg-entry') && !e.target.closest('.sub-item') && activeEditControl) {
+        var controls = document.querySelector('.msg-controls.active');
+        if (controls) controls.classList.remove('active');
+        var card = document.querySelector('.msg-entry.editing, .sub-item.editing');
+        if (card) card.classList.remove('editing');
+        activeEditControl = null;
+      }
+    });
+
+    // Sheet drag gesture logic
     (function() {
-      var sheet = document.getElementById('sidebar'); var handle = document.getElementById('sheetHandle');
+      var sheet = document.getElementById('sidebar');
+      var handle = document.getElementById('sheetHandle');
       var isDragging = false, startY = 0, currentTranslate = window.innerHeight * 0.65;
       sheet.style.transform = `translateY(${currentTranslate}px)`;
       function onDragStart(y) { isDragging = true; startY = y; sheet.style.transition = 'none'; }
-      function onDragMove(y, e) { if (!isDragging) return; if(e) e.preventDefault(); var delta = y - startY; currentTranslate += delta; startY = y; var maxT = window.innerHeight * 0.9; if (currentTranslate < 0) currentTranslate = 0; if (currentTranslate > maxT) currentTranslate = maxT; sheet.style.transform = `translateY(${currentTranslate}px)`; }
+      function onDragMove(y, e) { 
+        if (!isDragging) return; if(e) e.preventDefault(); 
+        var delta = y - startY; currentTranslate += delta; startY = y;
+        var maxT = window.innerHeight * 0.9;
+        if (currentTranslate < 0) currentTranslate = 0; if (currentTranslate > maxT) currentTranslate = maxT;
+        sheet.style.transform = `translateY(${currentTranslate}px)`;
+      }
       function onDragEnd() { isDragging = false; sheet.style.transition = 'transform 0.2s ease-out'; }
       handle.addEventListener('touchstart', e => onDragStart(e.touches[0].clientY), {passive: true});
       handle.addEventListener('mousedown', e => onDragStart(e.clientY));
