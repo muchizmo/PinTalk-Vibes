@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v85 - Unified UI & Smart Subs</title>
+  <title>GeoChat v90 - All Subscribed Bubbles Visible</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -291,15 +291,33 @@
     };
     var items = loadItems(), realLocation = null, viewLocation = { lat: 0, lng: 0 }, activeId = null, currentTab = 'messages';
     var postTarget = { lat: null, lng: null, itemId: null }, rangeEditorsOpen = {}, viewRadius = 5, viewMarker = null;
-    var currentMaxKm = 10, currentItemMaxKm = 2, minKm = 0.01, minTimeH = 1, maxTimeH = 8760, viewTimeH = 720;
+    var currentMaxKm = 10, currentItemMaxKm = 10, minKm = 0.01, minTimeH = 1, maxTimeH = 8760, viewTimeH = 720;
     var allTags = ['general', 'question', 'event', 'warning', 'new'];
 
-    var fmtDist = function(km) { if(km >= 1000) return (km/1000).toFixed(2)+'k km'; if(km >= 1) return Math.round(km) + ' km'; return km.toFixed(2) + ' km'; };
+    var fmtDist = function(km) {
+      km = Number(km);
+      if (isNaN(km) || km < 0) km = 0;
+      if(km >= 1000) return (km/1000).toFixed(2)+'k km'; 
+      if(km >= 1) return Math.round(km) + ' km'; 
+      return km.toFixed(2) + ' km'; 
+    };
     var fmtTime = function(h) { return h<2?'1h':h<24?Math.round(h)+'h':h<168?Math.round(h/24)+'d':h<8760?(h/730).toFixed(1)+'mo':'1yr'; };
-    var getDist = function(a, b) { if(!a || !b) return 0; var R=6371, toRad=Math.PI/180, dLat=(b.lat-a.lat)*toRad, dLon=(b.lng-a.lng)*toRad, aVal=Math.sin(dLat/2)**2+Math.cos(a.lat*toRad)*Math.cos(b.lat*toRad)*Math.sin(dLon/2)**2; return R*2*Math.atan2(Math.sqrt(aVal),Math.sqrt(1-aVal)); };
+    var getDist = function(a, b) { 
+      if(!a || !b || typeof a.lat !== 'number' || typeof b.lat !== 'number') return 0; 
+      var R=6371, toRad=Math.PI/180, dLat=(b.lat-a.lat)*toRad, dLon=(b.lng-a.lng)*toRad, aVal=Math.sin(dLat/2)**2+Math.cos(a.lat*toRad)*Math.cos(b.lat*toRad)*Math.sin(dLon/2)**2; 
+      return R*2*Math.atan2(Math.sqrt(aVal),Math.sqrt(1-aVal)); 
+    };
     var findItem = function(id) { for(var i=0;i<items.length;i++) if(items[i].id===id) return items[i]; return null; };
-    function kmToPercent(km, max) { if(km < minKm) km = minKm; return Math.min(100, Math.max(0, 100 * (Math.log(km / minKm) / Math.log(max / minKm)))); }
-    function percentToKm(percent, max) { return minKm * Math.pow(max / minKm, percent / 100); }
+    
+    function kmToPercent(km, max) { 
+      if (!max || max <= 0) max = 10; 
+      if (km < minKm) km = minKm; 
+      return Math.min(100, Math.max(0, 100 * (Math.log(km / minKm) / Math.log(max / minKm)))); 
+    }
+    function percentToKm(percent, max) { 
+      if (!max || max <= 0) max = 10; 
+      return minKm * Math.pow(max / minKm, (percent || 0) / 100); 
+    }
 
     window.toggleSubTag = function(subId, tag) { var sub = findItem(subId); if(!sub || !sub.allowedTags) return; var idx = sub.allowedTags.indexOf(tag); if(idx > -1) sub.allowedTags.splice(idx, 1); else sub.allowedTags.push(tag); saveData(); applyFilters(); };
     window.editItem = function(id) { var item = findItem(id); if(!item) return; var newTitle = prompt("Edit title:", item.title); if(newTitle !== null) { item.title = sanitize(newTitle.trim()); saveData(); applyFilters(); } };
@@ -320,14 +338,14 @@
     window.applyRangeChange = function(id) { applyFilters(); };
     window.subscribeToBubble = function(id) {
       var item = findItem(id); if(!item) return;
-      items.push({ id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), lat: item.lat, lng: item.lng, range: item.range, category: 'subscription', title: sanitize(item.title), messages: [], isFromBubble: true, sourceBubbleId: id, allowedTags: allTags, createdAt: toSec(Date.now()), viewLog: {} });
+      items.push({ id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36), lat: Number(item.lat), lng: Number(item.lng), range: Number(item.range) || 0, category: 'subscription', title: sanitize(item.title), messages: [], isFromBubble: true, sourceBubbleId: id, allowedTags: allTags, createdAt: toSec(Date.now()), viewLog: {} });
       saveData(); switchTab('subscriptions'); applyFilters();
     };
     window.editSubscription = function(id) { var i = findItem(id); if(!i) return; var t = prompt("Edit title:", i.title); if(t && t.trim()) { i.title = sanitize(t.trim()); saveData(); applyFilters(); } };
     window.deleteSubscription = function(id) { if(!confirm("Delete?")) return; var idx = items.findIndex(x => x.id === id); if(idx > -1) { items.splice(idx, 1); delete rangeEditorsOpen[id]; saveData(); applyFilters(); } };
     window.openModal = function(itemId) {
       var m = document.getElementById('addModal'), t = document.getElementById('modalTitle');
-      if(itemId) { var i = findItem(itemId); t.textContent = '➕ Add to Thread: ' + (i?sanitize(i.title):''); postTarget = { lat: i.lat, lng: i.lng, itemId: itemId }; }
+      if(itemId) { var i = findItem(itemId); t.textContent = '➕ Add to Thread: ' + (i?sanitize(i.title):''); postTarget = { lat: Number(i.lat), lng: Number(i.lng), itemId: itemId }; }
       else t.textContent = '📝 Leave a Message'; m.classList.remove('hidden');
     };
 
@@ -372,13 +390,13 @@
     map.on('zoomend', adaptSlidersToZoom);
 
     function initLocation(lat, lng, success) {
-      viewLocation = { lat, lng }; if (success) realLocation = { lat, lng }; else realLocation = null;
+      viewLocation = { lat: Number(lat), lng: Number(lng) }; if (success) realLocation = { lat: viewLocation.lat, lng: viewLocation.lng }; else realLocation = null;
       if (!viewMarker) {
-        viewMarker = L.marker([lat, lng], { icon: L.divIcon({ className: 'gc-view-marker pulse', html: '🔵', iconSize: [30, 30], iconAnchor: [15, 15] }), draggable: true, zIndexOffset: 2000 }).addTo(map);
+        viewMarker = L.marker([viewLocation.lat, viewLocation.lng], { icon: L.divIcon({ className: 'gc-view-marker pulse', html: '🔵', iconSize: [30, 30], iconAnchor: [15, 15] }), draggable: true, zIndexOffset: 2000 }).addTo(map);
         viewMarker.on('drag', function(e) { var pos = e.target.getLatLng(); viewLocation.lat = pos.lat; viewLocation.lng = pos.lng; radiusCircle.setLatLng(pos); });
         viewMarker.on('dragend', function(e) { var pos = e.target.getLatLng(); viewLocation.lat = pos.lat; viewLocation.lng = pos.lng; radiusCircle.setLatLng(pos); refreshViewIcon(); updateUI(); applyFilters(); });
-      } else { viewMarker.setLatLng([lat, lng]); }
-      radiusCircle.setLatLng([lat, lng]); map.setView(viewLocation, 13); adaptSlidersToZoom(); updateUI(); switchTab('messages');
+      } else { viewMarker.setLatLng([viewLocation.lat, viewLocation.lng]); }
+      radiusCircle.setLatLng([viewLocation.lat, viewLocation.lng]); map.setView(viewLocation, 13); adaptSlidersToZoom(); updateUI(); switchTab('messages');
     }
 
     function refreshViewIcon() {
@@ -402,6 +420,22 @@
 
     map.on('dblclick', function(e) { openModal(); });
     document.getElementById('spotItBtn').addEventListener('click', function() { if(viewLocation.lat === 0) { alert('Please wait for GPS or tap map to set location first'); return; } openModal(); });
+
+    document.getElementById('viewRadius').addEventListener('input', function(e) { 
+      var val = parseFloat(e.target.value); if (isNaN(val)) return;
+      viewRadius = percentToKm(val, currentMaxKm || 10);
+      document.getElementById('radiusVal').textContent = fmtDist(viewRadius); 
+      radiusCircle.setRadius(viewRadius * 1000); 
+      if(!document.getElementById('showAll').checked) applyFilters(); 
+    });
+
+    document.getElementById('time').addEventListener('input', function(e) { viewTimeH = minTimeH * Math.pow(maxTimeH/minTimeH, e.target.value/100); applyFilters(); });
+    document.getElementById('categoryFilter').addEventListener('change', applyFilters);
+    document.getElementById('showAll').addEventListener('change', function(e) { 
+      if(e.target.checked) { viewRadius=currentMaxKm || 10; document.getElementById('viewRadius').value=100; document.getElementById('radiusVal').textContent='∞'; radiusCircle.setRadius(200000000); } 
+      else { viewRadius = 5; document.getElementById('viewRadius').value = kmToPercent(viewRadius, currentMaxKm || 10); document.getElementById('radiusVal').textContent = fmtDist(viewRadius); radiusCircle.setRadius(viewRadius * 1000); }
+      applyFilters(); 
+    });
 
     window.setActive = function(id) {
       if(!id) { activeId = null; selectedRangeCircle.setRadius(0); applyFilters(); return; }
@@ -429,7 +463,6 @@
 
     window.centerMapOnItem = function(id) { setActive(id); };
 
-    // 🔧 UNIFIED HELPER: Renders messages exactly the same for NearBy and Subs tabs
     function renderMessageContent(item, isNew) {
       var h = '';
       var msgCount = item.messages.length;
@@ -458,28 +491,35 @@
       return h;
     }
 
-    // 🔧 UNIFIED RENDER LIST
     function renderList(all) {
       var el = document.getElementById('content'); el.innerHTML = '';
       if(!all.length) { 
         var msg = currentTab === 'messages' ? 'No messages in current range.<br><br>💡 <b>Tip:</b> Increase your range slider or check "🌍 Show All" to see more messages.' : 'No subscription bubbles.';
         el.innerHTML = '<p class="empty">'+msg+'</p>'; return; 
       }
+      var cm = {general:'💬 General',question:'❓ Question',event:'🎉 Event',warning:'⚠️ Warning'};
+
       all.forEach(item => {
         var s = item.category === 'subscription';
         var card = document.createElement('div');
         card.className = 'card'+(s?(item.isFromBubble?' subscription bubble-sub':' subscription'):'');
         card.dataset.id = item.id; if(item.id === activeId) card.classList.add('active');
         
-        var d = fmtDist(item._dist);
-        var cm = {general:'💬 General',question:'❓ Question',event:'🎉 Event',warning:'⚠️ Warning'};
-        var bt = s?(item.isFromBubble?'🎈 Bubble':'📡 Subscription'):(cm[item.category]||'💬 Message');
-        var h = '<div class="msg-header"><span class="category-badge '+(s?'subscription':item.category)+'">'+bt+'</span><span class="distance">📏 '+d+'</span></div>';
+        var d = fmtDist(item._dist || 0);
+        var badgeClass = s ? 'subscription' : item.category;
+        var bt;
+        if (s) {
+          if (!item.isFromBubble) bt = sanitize(item.title) || '📡 Subscription';
+          else if (item._bubbleContent) bt = cm[item._bubbleContent.category] || '💬 Message';
+          else bt = '📡 Subscription';
+        } else {
+          bt = cm[item.category] || '💬 Message';
+        }
+        
+        var h = '<div class="msg-header"><span class="category-badge '+badgeClass+'">'+bt+'</span><span class="distance">📏 '+d+'</span></div>';
 
-        // 🔧 Active State Toolbar (Unified)
         if(item.id === activeId) {
           if(!s) {
-            // NearBy Controls: Sub button now works for single & multi
             h += '<div style="display:flex;gap:4px;margin:6px 0;flex-wrap:wrap;">'
               + '<button class="action-btn" onclick="event.stopPropagation();subscribeToBubble(\''+item.id+'\')">📡 Sub</button>'
               + '<button class="action-btn" onclick="event.stopPropagation();editItem(\''+item.id+'\')">✏️</button>'
@@ -488,7 +528,6 @@
               + '<button class="action-btn" onclick="event.stopPropagation();openModal(\''+item.id+'\')">➕</button>'
               + '<span style="font-size:0.7rem;color:var(--muted);align-self:center;margin-left:auto">💬 '+item.messages.length+'</span></div>';
           } else {
-            // Subscription Controls
             var rc = item.isFromBubble?'<button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️</button><span style="font-size:0.7rem;color:var(--muted);align-self:center">📥 Locked</span>':'<button class="action-btn" onclick="event.stopPropagation();toggleRangeEditor(\''+item.id+'\')">⚙️</button><button class="action-btn" onclick="event.stopPropagation();editSubscription(\''+item.id+'\')">✏️</button><button class="action-btn danger" onclick="event.stopPropagation();deleteSubscription(\''+item.id+'\')">🗑️</button><span style="font-size:0.7rem;color:var(--muted);align-self:center;margin-left:auto">📥 '+(item.capturedCount||0)+' msgs</span>';
             h += '<div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap;">'+rc+'</div>';
           }
@@ -507,14 +546,15 @@
           }
         }
 
-        // 🔧 Message Content (Identical across tabs)
         if(s && item.isFromBubble && item._bubbleContent) {
-          h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">'+renderMessageContent(item._bubbleContent, false)+'</div>';
+          h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">';
+          h += renderMessageContent(item._bubbleContent, false);
+          h += '</div>';
         } else if(s && item.capturedGroups) {
-          h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px;">';
+          h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;">';
           item.capturedGroups.forEach((g,gi) => {
-            h += renderMessageContent({id:g.sourceId, category:g.messages[0]?.category||'general', title:g.sourceTitle, messages:g.messages, _dist:g.distance}, g.messages[0]?g.messages[0].isNew:false);
-            if(gi < item.capturedGroups.length-1) h+='<div style="height:1px;background:var(--border);margin:2px 0;"></div>';
+            h += '<div>' + renderMessageContent({id:g.sourceId, category:g.messages[0]?.category||'general', title:g.sourceTitle, messages:g.messages, _dist:g.distance}, g.messages[0]?.isNew) + '</div>';
+            if(gi < item.capturedGroups.length-1) h+='<div style="height:1px;background:var(--border);margin:6px 0;"></div>';
           });
           h+='</div>';
         } else {
@@ -556,15 +596,33 @@
     }
 
     function renderMap(all) {
-      markersLayer.clearLayers(); var col = '#f87171';
-      all.forEach(item => { if(item.category === 'subscription' && item.range > 0 && (!item.isFromBubble || item.id === activeId)) L.circle([item.lat,item.lng], { radius: item.range*1000, color: col, fillColor: col, fillOpacity: 0.12, weight: 2, dashArray: '5,5', itemId: item.id }).addTo(markersLayer); });
+      markersLayer.clearLayers(); 
+      var col = '#f87171';
+      var subCol = '#06b6d4';
+      var subFromBubbleCol = '#f97316';
+      
+      // 🔧 Show ALL subscription bubbles on the map (removed activeId filter)
+      all.forEach(item => { 
+        if(item.category === 'subscription' && item.range > 0) {
+           var color = item.isFromBubble ? subFromBubbleCol : subCol;
+           var opacity = item.isFromBubble ? 0.08 : 0.12;
+           var weight = item.isFromBubble ? 1 : 2;
+           L.circle([item.lat,item.lng], { radius: item.range*1000, color: color, fillColor: color, fillOpacity: opacity, weight: weight, dashArray: '5,5', itemId: item.id }).addTo(markersLayer); 
+        }
+      });
+      
+      // 🔧 Show icons for ALL items, including subscribed bubbles
       var icoMap = { general:'💬', question:'❓', event:'🎉', warning:'⚠️', subscription:'📡' };
       all.forEach(item => {
-        if(!item.lat || !item.lng || item.isFromBubble) return;
+        if(!item.lat || !item.lng) return; 
         var s = item.category === 'subscription', act = item.id === activeId, cap = item._isCaptured;
         var h = icoMap[item.category] || '💬';
+        // Use original category icon for subscribed bubbles if available
+        if(s && item.isFromBubble && item._bubbleContent) h = icoMap[item._bubbleContent.category] || '💬';
+        
         var c = 'gc-msg-icon' + (s ? ' gc-sub-icon' : '') + (act ? ' active' : '') + (cap ? ' gc-captured' : '');
         var pop = s ? '<b>'+sanitize(item.title)+'</b><br>📏 Range: '+item.range.toFixed(2)+'km' : '<b>'+sanitize(item.title)+'</b><br>💬 '+item.messages.length+' msgs';
+        
         var m = L.marker([item.lat, item.lng], { icon: L.divIcon({className:c, html:h, iconSize:[30,30], iconAnchor:[15,30]}), draggable: true }).bindPopup(pop).addTo(markersLayer);
         m.on('drag', function(e) { if(item.category === 'subscription' && item.range > 0) { var newPos = e.target.getLatLng(); markersLayer.eachLayer(function(layer) { if(layer instanceof L.Circle && layer.options.itemId === item.id) layer.setLatLng(newPos); }); } });
         m.on('dragend', function(e) { var pos = e.target.getLatLng(); var obj = findItem(item.id); if(obj) { obj.lat = pos.lat; obj.lng = pos.lng; saveData(); applyFilters(); } });
