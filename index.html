@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v90 - All Subscribed Bubbles Visible</title>
+  <title>GeoChat v93 - Hide Empty Filtered Bubbles</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -115,6 +115,19 @@
     .msg-controls .mini-btn { padding: 2px 6px; font-size: 0.7rem; background: var(--accent); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
     .msg-controls .mini-btn.danger { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
     .msg-entry.editing, .sub-item.editing { border-color: var(--primary); background: #eff6ff; }
+
+    .msg-quote {
+      font-size: 0.7rem; color: var(--muted); margin: 2px 0 4px; padding: 3px 6px;
+      background: var(--accent); border-left: 2px solid var(--primary); border-radius: 3px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+    }
+    .msg-quote:hover { background: #e5e7eb; }
+    
+    .reply-container {
+      margin-left: 14px; padding-left: 8px; margin-top: 4px; margin-bottom: 4px;
+      border-left: 2px solid var(--border);
+      display: flex; flex-direction: column; gap: 4px;
+    }
 
     .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 20; backdrop-filter: blur(2px); }
     .hidden { display: none !important; }
@@ -273,13 +286,38 @@
       if (!confirm("Delete this message?")) return;
       var item = findItem(itemId); if (!item || !item.messages[msgIndex]) return;
       item.messages.splice(msgIndex, 1);
+      item.messages.forEach(m => { if (m.replyTo === msgIndex) delete m.replyTo; else if (m.replyTo > msgIndex) m.replyTo--; });
       if (item.messages.length > 0 && msgIndex === 0 && item._autoTitle) item.title = item.messages[0].text.length > 30 ? item.messages[0].text.substring(0, 30) + '…' : item.messages[0].text;
       saveData(); applyFilters();
+    };
+
+    window.doReplyMessage = function(itemId, msgIndex, event) {
+      if(event) event.stopPropagation();
+      var item = findItem(itemId); if (!item || !item.messages[msgIndex]) return;
+      var parentMsg = item.messages[msgIndex];
+      var preview = parentMsg.text.length > 40 ? parentMsg.text.substring(0, 40) + '...' : parentMsg.text;
+      
+      postTarget = { lat: item.lat, lng: item.lng, itemId: item.id, replyTo: msgIndex };
+      document.getElementById('modalTitle').textContent = '↩️ Reply to message';
+      var textarea = document.getElementById('msgText');
+      textarea.placeholder = 'Replying to: "' + preview + '"';
+      textarea.value = '';
+      document.getElementById('msgCategory').value = item.category;
+      document.getElementById('addModal').classList.remove('hidden');
+      setTimeout(() => textarea.focus(), 100);
     };
 
     window.startMsgEdit = function(id, index, event) { if(event) event.stopPropagation(); clearTimeout(msgEditTimer); msgEditTarget = { id: id, index: index }; msgEditTimer = setTimeout(function() { toggleMsgControls(msgEditTarget.id, msgEditTarget.index); }, 600); };
     window.cancelMsgEdit = function(event) { if(event) event.stopPropagation(); clearTimeout(msgEditTimer); msgEditTimer = null; };
     window.editMsgDblClick = function(id, index, event) { if(event) event.stopPropagation(); clearTimeout(msgEditTimer); toggleMsgControls(id, index); };
+
+    window.scrollToParentMsg = function(itemId, replyIndex, event) {
+      if(event) event.stopPropagation();
+      var item = findItem(itemId);
+      if(!item || item.messages[replyIndex] === undefined) return;
+      var parentEl = document.getElementById('msg-'+itemId+'-'+replyIndex);
+      if(parentEl) { parentEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); parentEl.style.background='#f5f3ff'; setTimeout(()=>parentEl.style.background='', 1500); }
+    };
 
     var toSec = function(ts) { return ts > 1e12 ? Math.floor(ts / 1000) : ts; };
     const loadItems = () => {
@@ -463,33 +501,75 @@
 
     window.centerMapOnItem = function(id) { setActive(id); };
 
-    function renderMessageContent(item, isNew) {
+    function renderSingleMessageWithReplies(item, idx, isOrig) {
+      var m = item.messages[idx];
       var h = '';
-      var msgCount = item.messages.length;
-      if (msgCount > 1) {
-        h += '<p class="msg-text" style="font-weight:500;margin:4px 0">'+sanitize(item.title)+'</p>';
-        for(var j=0; j<msgCount; j++) {
-          var m = item.messages[j], isOrig = j === 0;
-          h += '<div class="sub-item '+(isOrig?'original':'')+'" id="msg-'+item.id+'-'+j+'" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgDblClick(\''+item.id+'\','+j+',event)" ontouchstart="startMsgEdit(\''+item.id+'\','+j+',event)" ontouchend="cancelMsgEdit(event)" onmousedown="startMsgEdit(\''+item.id+'\','+j+',event)" onmouseup="cancelMsgEdit(event)">'+
-            (isOrig ? '<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">Original</div>' : '')+
-            '<div class="meta">👤 '+sanitize(m.author)+' · '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+sanitize(m.text)+
-            '<div class="msg-controls" id="controls-'+item.id+'-'+j+'" onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">'+
-              '<button class="mini-btn" onclick="event.stopPropagation(); doEditMessage(\''+item.id+'\','+j+',event)">✏️ Edit</button>'+
-              '<button class="mini-btn danger" onclick="event.stopPropagation(); doDeleteMessage(\''+item.id+'\','+j+',event)">🗑️ Delete</button></div></div>';
-        }
-      } else if (msgCount === 1) {
-        var m = item.messages[0];
-        h += '<div class="msg-entry" id="msg-'+item.id+'-0" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgDblClick(\''+item.id+'\','+0+',event)" ontouchstart="startMsgEdit(\''+item.id+'\','+0+',event)" ontouchend="cancelMsgEdit(event)" onmousedown="startMsgEdit(\''+item.id+'\','+0+',event)" onmouseup="cancelMsgEdit(event)">'+
+      var replyHtml = '';
+      if (m.replyTo !== undefined && item.messages[m.replyTo]) {
+        var parentText = item.messages[m.replyTo].text;
+        var quoteText = parentText.length > 50 ? parentText.substring(0, 50) + '…' : parentText;
+        replyHtml = '<div class="msg-quote" onclick="scrollToParentMsg(\''+item.id+'\','+m.replyTo+',event)">↩️ ' + sanitize(quoteText) + '</div>';
+      }
+      
+      if (item.messages.length > 1 || m.replyTo !== undefined) {
+        h += '<div class="sub-item '+(isOrig?'original':'')+'" id="msg-'+item.id+'-'+idx+'" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgDblClick(\''+item.id+'\','+idx+',event)" ontouchstart="startMsgEdit(\''+item.id+'\','+idx+',event)" ontouchend="cancelMsgEdit(event)" onmousedown="startMsgEdit(\''+item.id+'\','+idx+',event)" onmouseup="cancelMsgEdit(event)">'+
+          (isOrig ? '<div style="font-size:0.65rem;color:var(--primary);margin-bottom:2px">Original</div>' : '')+
+          replyHtml +
+          '<div class="meta">👤 '+sanitize(m.author)+' · '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+sanitize(m.text)+
+          '<div class="msg-controls" id="controls-'+item.id+'-'+idx+'" onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">'+
+            '<button class="mini-btn" onclick="event.stopPropagation(); doEditMessage(\''+item.id+'\','+idx+',event)">✏️ Edit</button>'+
+            '<button class="mini-btn" onclick="event.stopPropagation(); doReplyMessage(\''+item.id+'\','+idx+',event)">💬 Reply</button>'+
+            '<button class="mini-btn danger" onclick="event.stopPropagation(); doDeleteMessage(\''+item.id+'\','+idx+',event)">🗑️ Delete</button></div></div>';
+      } else {
+        h += '<div class="msg-entry" id="msg-'+item.id+'-'+idx+'" onclick="event.stopPropagation(); centerMapOnItem(\''+item.id+'\')" ondblclick="editMsgDblClick(\''+item.id+'\','+idx+',event)" ontouchstart="startMsgEdit(\''+item.id+'\','+idx+',event)" ontouchend="cancelMsgEdit(event)" onmousedown="startMsgEdit(\''+item.id+'\','+idx+',event)" onmouseup="cancelMsgEdit(event)">'+
+          replyHtml +
           '<p class="msg-text" style="margin-bottom:2px">'+sanitize(m.text)+'</p>'+
           '<div class="meta">👤 '+sanitize(m.author)+' · 🕒 '+new Date(m.timestamp * 1000).toLocaleString([], {hour:'2-digit',minute:'2-digit'})+'</div>'+
-          '<div class="msg-controls" id="controls-'+item.id+'-0" onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">'+
-            '<button class="mini-btn" onclick="event.stopPropagation(); doEditMessage(\''+item.id+'\','+0+',event)">✏️ Edit</button>'+
-            '<button class="mini-btn danger" onclick="event.stopPropagation(); doDeleteMessage(\''+item.id+'\','+0+',event)">🗑️ Delete</button></div></div>';
-      } else {
-        h += '<div style="padding:8px;text-align:center;color:var(--muted);font-size:0.8rem">No messages.</div>';
+          '<div class="msg-controls" id="controls-'+item.id+'-'+idx+'" onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">'+
+            '<button class="mini-btn" onclick="event.stopPropagation(); doEditMessage(\''+item.id+'\','+idx+',event)">✏️ Edit</button>'+
+            '<button class="mini-btn" onclick="event.stopPropagation(); doReplyMessage(\''+item.id+'\','+idx+',event)">💬 Reply</button>'+
+            '<button class="mini-btn danger" onclick="event.stopPropagation(); doDeleteMessage(\''+item.id+'\','+idx+',event)">🗑️ Delete</button></div></div>';
       }
       return h;
     }
+
+    function renderMessageTree(item) {
+      var h = '';
+      var msgCount = item.messages.length;
+      if (msgCount === 0) return '<div style="padding:8px;text-align:center;color:var(--muted);font-size:0.8rem">No messages.</div>';
+      
+      var childrenMap = {};
+      var roots = [];
+      item.messages.forEach((m, i) => {
+        if (m.replyTo !== undefined && item.messages[m.replyTo]) {
+          if (!childrenMap[m.replyTo]) childrenMap[m.replyTo] = [];
+          childrenMap[m.replyTo].push(i);
+        } else {
+          roots.push(i);
+        }
+      });
+      
+      if (msgCount > 1) h += '<p class="msg-text" style="font-weight:500;margin:4px 0">'+sanitize(item.title)+'</p>';
+
+      function renderNode(idx, depth) {
+        var m = item.messages[idx];
+        if (!m) return '';
+        var isOrig = idx === 0;
+        var out = renderSingleMessageWithReplies(item, idx, isOrig && depth === 0);
+        
+        if (childrenMap[idx]) {
+          out += '<div class="reply-container">';
+          childrenMap[idx].forEach(childIdx => { out += renderNode(childIdx, depth + 1); });
+          out += '</div>';
+        }
+        return out;
+      }
+      
+      roots.forEach(idx => { h += renderNode(idx, 0); });
+      return h;
+    }
+
+    function renderMessageContent(item, isNew) { return renderMessageTree(item); }
 
     function renderList(all) {
       var el = document.getElementById('content'); el.innerHTML = '';
@@ -548,25 +628,26 @@
 
         if(s && item.isFromBubble && item._bubbleContent) {
           h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">';
-          h += renderMessageContent(item._bubbleContent, false);
+          h += renderMessageTree(item._bubbleContent);
           h += '</div>';
         } else if(s && item.capturedGroups) {
           h += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;">';
           item.capturedGroups.forEach((g,gi) => {
-            h += '<div>' + renderMessageContent({id:g.sourceId, category:g.messages[0]?.category||'general', title:g.sourceTitle, messages:g.messages, _dist:g.distance}, g.messages[0]?.isNew) + '</div>';
+            h += '<div>' + renderMessageTree({id:g.sourceId, category:g.messages[0]?.category||'general', title:g.sourceTitle, messages:g.messages, _dist:g.distance}) + '</div>';
             if(gi < item.capturedGroups.length-1) h+='<div style="height:1px;background:var(--border);margin:6px 0;"></div>';
           });
           h+='</div>';
         } else {
-          h += renderMessageContent(item, false);
+          h += renderMessageTree(item);
         }
 
         card.innerHTML = h; 
-        card.onclick = e => { if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.closest('.range-editor')||e.target.closest('.sub-item')||e.target.closest('.msg-entry')||e.target.closest('.msg-controls')) return; setActive(item.id); }; 
+        card.onclick = e => { if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.closest('.range-editor')||e.target.closest('.sub-item')||e.target.closest('.msg-entry')||e.target.closest('.msg-controls')||e.target.closest('.reply-container')) return; setActive(item.id); }; 
         el.appendChild(card);
       });
     }
 
+    // 🔧 FIX: Hide bubbles that have 0 visible messages after filtering
     function applyFilters() {
       var sa = document.getElementById('showAll').checked, cat = document.getElementById('categoryFilter').value;
       var ur = sa ? Infinity : viewRadius; document.getElementById('radiusVal').textContent = sa ? '∞' : fmtDist(ur);
@@ -590,7 +671,17 @@
         } subs.push(Object.assign({},it,{_dist:d})); 
       });
 
-      items.forEach(it => { if(it.category==='subscription')return; var vm=[]; it.messages.forEach(m=>{m.timestamp=toSec(m.timestamp);if(m.timestamp>=cut)vm.push(m);}); var d=getDist(viewLocation,it), cm=cat==='all'||it.category===cat, ic=capIds.has(it.id); if((d<=ur||ic)&&cm) mapMsgs.push(Object.assign({},it,{_dist:d,messages:vm,_isCaptured:ic})); if(d<=ur&&cm) msgs.push(Object.assign({},it,{_dist:d,messages:vm,_isCaptured:ic})); });
+      items.forEach(it => { 
+        if(it.category==='subscription') return; 
+        var vm=[]; 
+        it.messages.forEach(m=>{ m.timestamp=toSec(m.timestamp); if(m.timestamp>=cut) vm.push(m); }); 
+        var d=getDist(viewLocation,it), cm=cat==='all'||it.category===cat, ic=capIds.has(it.id); 
+        // 🔧 Only push to display lists if it has at least one visible message
+        if (vm.length > 0 && (d<=ur || ic) && cm) {
+           mapMsgs.push(Object.assign({},it,{_dist:d, messages:vm, _isCaptured:ic})); 
+           if(d<=ur) msgs.push(Object.assign({},it,{_dist:d, messages:vm, _isCaptured:ic})); 
+        }
+      });
       
       renderMap(mapMsgs.concat(subs)); var li = currentTab==='subscriptions' ? subs : msgs; li.sort((a,b)=>a._dist-b._dist); renderList(li); radiusCircle.setRadius(sa?200000000:ur*1000); saveData();
     }
@@ -601,7 +692,6 @@
       var subCol = '#06b6d4';
       var subFromBubbleCol = '#f97316';
       
-      // 🔧 Show ALL subscription bubbles on the map (removed activeId filter)
       all.forEach(item => { 
         if(item.category === 'subscription' && item.range > 0) {
            var color = item.isFromBubble ? subFromBubbleCol : subCol;
@@ -611,13 +701,11 @@
         }
       });
       
-      // 🔧 Show icons for ALL items, including subscribed bubbles
       var icoMap = { general:'💬', question:'❓', event:'🎉', warning:'⚠️', subscription:'📡' };
       all.forEach(item => {
         if(!item.lat || !item.lng) return; 
         var s = item.category === 'subscription', act = item.id === activeId, cap = item._isCaptured;
         var h = icoMap[item.category] || '💬';
-        // Use original category icon for subscribed bubbles if available
         if(s && item.isFromBubble && item._bubbleContent) h = icoMap[item._bubbleContent.category] || '💬';
         
         var c = 'gc-msg-icon' + (s ? ' gc-sub-icon' : '') + (act ? ' active' : '') + (cap ? ' gc-captured' : '');
@@ -639,14 +727,29 @@
     }
     
     document.getElementById('returnBtn').onclick = () => { if(realLocation){ viewLocation={...realLocation}; viewMarker.setLatLng(viewLocation); radiusCircle.setLatLng(viewLocation); radiusCircle.setRadius(viewRadius*1000); refreshViewIcon(); updateUI(); applyFilters(); map.panTo(viewLocation,{animate:true}); }};
-    document.getElementById('cancelBtn').onclick = () => document.getElementById('addModal').classList.add('hidden');
+    document.getElementById('cancelBtn').onclick = () => { document.getElementById('addModal').classList.add('hidden'); postTarget={lat:null,lng:null,itemId:null}; };
     document.getElementById('submitBtn').onclick = () => { 
       var t=document.getElementById('msgText').value.trim(); if(!t)return alert('Enter text'); 
       var c=document.getElementById('msgCategory').value; 
       var nm={id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:postTarget.lat,lng:postTarget.lng,text:sanitize(t),category:c,author:'User_'+Math.floor(Math.random()*9000+1000),timestamp:toSec(Date.now())}; 
-      if(postTarget.itemId){ var i=findItem(postTarget.itemId); if(i && i.category!=='subscription'){ i.messages.push(nm); if(i._autoTitle) i.title=sanitize(t.length>30?t.substring(0,30)+'…':t); } }
-      else { items.push({ id:nm.id, lat:nm.lat, lng:nm.lng, range:c==='subscription'?viewRadius:0, category:c, title:sanitize(t.length>30?t.substring(0,30)+'…':t), messages:c==='subscription'?[]:[nm], createdAt:nm.timestamp, _autoTitle: true }); }
-      document.getElementById('addModal').classList.add('hidden'); document.getElementById('msgText').value=''; postTarget={lat:null,lng:null,itemId:null}; saveData(); applyFilters();
+      
+      if(postTarget.replyTo !== undefined) nm.replyTo = postTarget.replyTo;
+      
+      if(postTarget.itemId){ 
+        var i=findItem(postTarget.itemId); 
+        if(i && i.category!=='subscription'){ 
+          i.messages.push(nm); 
+          if(i._autoTitle) i.title=sanitize(t.length>30?t.substring(0,30)+'…':t); 
+        } 
+      } else { 
+        items.push({ id:nm.id, lat:nm.lat, lng:nm.lng, range:c==='subscription'?viewRadius:0, category:c, title:sanitize(t.length>30?t.substring(0,30)+'…':t), messages:c==='subscription'?[]:[nm], createdAt:nm.timestamp, _autoTitle: true }); 
+      } 
+      document.getElementById('addModal').classList.add('hidden'); 
+      document.getElementById('msgText').value=''; 
+      document.getElementById('msgText').placeholder='What\'s happening here?';
+      document.getElementById('modalTitle').textContent='📝 Leave a Message';
+      postTarget={lat:null,lng:null,itemId:null}; 
+      saveData(); applyFilters();
     };
     document.getElementById('demoBtn').onclick = () => { 
       if(items.length>10 && !confirm('Replace data?'))return; var cats=['general','question','event','warning'], txts=['Coffee ☕','Open?','Event 🎵','Alert ⚠️','View 🌅','Walk?','Traffic 🚗','Shop 🛍️','Dog 🐕','Music ']; var di=[]; var nowSec = toSec(Date.now()); for(var i=0;i<12;i++){var dist=[0.1,0.5,2,10,30][Math.floor(Math.random()*5)],ang=Math.random()*Math.PI*2; var dl=(dist/111.32)*Math.cos(ang),dln=(dist/(111.32*Math.cos(viewLocation.lat*Math.PI/180)))*Math.sin(ang); var t=txts[Math.floor(Math.random()*txts.length)]; var msgTs = nowSec - Math.floor(Math.random()*86400*7); di.push({id:crypto.randomUUID?crypto.randomUUID():Date.now().toString(36),lat:viewLocation.lat+dl,lng:viewLocation.lng+dln,range:0,category:cats[Math.floor(Math.random()*cats.length)],title:sanitize(t),createdAt:msgTs, _autoTitle: true, messages:[{id:crypto.randomUUID(),text:sanitize(t),category:cats[Math.floor(Math.random()*cats.length)],author:'Demo_'+(i+1),timestamp:msgTs}]});} di.push({id:crypto.randomUUID(),lat:viewLocation.lat,lng:viewLocation.lng,range:Math.min(5,currentItemMaxKm),category:'subscription',title:'Local Feed 📡',messages:[],allowedTags:allTags,createdAt:nowSec,viewLog:{}}); items=di;saveData();applyFilters();};
