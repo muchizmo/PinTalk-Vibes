@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>GeoChat v93 - Hide Empty Filtered Bubbles</title>
+  <title>GeoChat v94 - Original Sub Colors & Time-Sorted Subs</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -647,7 +647,7 @@
       });
     }
 
-    // 🔧 FIX: Hide bubbles that have 0 visible messages after filtering
+    // 🔧 FIX 1 & 2: Reverted circle colors, added time-based sorting for subscriptions
     function applyFilters() {
       var sa = document.getElementById('showAll').checked, cat = document.getElementById('categoryFilter').value;
       var ur = sa ? Infinity : viewRadius; document.getElementById('radiusVal').textContent = sa ? '∞' : fmtDist(ur);
@@ -676,28 +676,29 @@
         var vm=[]; 
         it.messages.forEach(m=>{ m.timestamp=toSec(m.timestamp); if(m.timestamp>=cut) vm.push(m); }); 
         var d=getDist(viewLocation,it), cm=cat==='all'||it.category===cat, ic=capIds.has(it.id); 
-        // 🔧 Only push to display lists if it has at least one visible message
         if (vm.length > 0 && (d<=ur || ic) && cm) {
            mapMsgs.push(Object.assign({},it,{_dist:d, messages:vm, _isCaptured:ic})); 
            if(d<=ur) msgs.push(Object.assign({},it,{_dist:d, messages:vm, _isCaptured:ic})); 
         }
       });
       
-      renderMap(mapMsgs.concat(subs)); var li = currentTab==='subscriptions' ? subs : msgs; li.sort((a,b)=>a._dist-b._dist); renderList(li); radiusCircle.setRadius(sa?200000000:ur*1000); saveData();
+      renderMap(mapMsgs.concat(subs)); 
+      var li = currentTab==='subscriptions' ? subs : msgs; 
+      // 🔧 Sort subscriptions by createdAt (newest first), messages by distance
+      li.sort((a,b) => currentTab === 'subscriptions' ? ((b.createdAt || 0) - (a.createdAt || 0)) : (a._dist - b._dist)); 
+      renderList(li); 
+      radiusCircle.setRadius(sa?200000000:ur*1000); 
+      saveData();
     }
 
     function renderMap(all) {
       markersLayer.clearLayers(); 
+      // 🔧 FIX 1: Reverted to original single color for all subscription circles
       var col = '#f87171';
-      var subCol = '#06b6d4';
-      var subFromBubbleCol = '#f97316';
       
       all.forEach(item => { 
         if(item.category === 'subscription' && item.range > 0) {
-           var color = item.isFromBubble ? subFromBubbleCol : subCol;
-           var opacity = item.isFromBubble ? 0.08 : 0.12;
-           var weight = item.isFromBubble ? 1 : 2;
-           L.circle([item.lat,item.lng], { radius: item.range*1000, color: color, fillColor: color, fillOpacity: opacity, weight: weight, dashArray: '5,5', itemId: item.id }).addTo(markersLayer); 
+           L.circle([item.lat,item.lng], { radius: item.range*1000, color: col, fillColor: col, fillOpacity: 0.12, weight: 2, dashArray: '5,5', itemId: item.id }).addTo(markersLayer); 
         }
       });
       
